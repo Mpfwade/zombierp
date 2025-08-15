@@ -105,8 +105,10 @@ end
 
 if SERVER then
     util.AddNetworkString("ixChatBubble")
-    function PLUGIN:PlayerMessageSend(speaker, chatType, text) -- Hook into Helix's PlayerMessageSend
+
+    function PLUGIN:PlayerMessageSend(speaker, chatType, text)
         if not IsValid(speaker) or not isstring(text) then return end
+
         local allowedTypes = {
             ic = true,
             whisper = true,
@@ -114,9 +116,11 @@ if SERVER then
             me = true
         }
 
-        if allowedTypes[chatType] then
+        -- chatType is a table with metadata, including its name
+        if allowedTypes[chatType.name] then
             local displayText = text
-            if chatType == "me" then
+
+            if chatType.name == "me" then
                 displayText = "*** " .. text
             else
                 displayText = "\"" .. text .. "\""

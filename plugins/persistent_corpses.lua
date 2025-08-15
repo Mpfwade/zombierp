@@ -164,27 +164,29 @@ if SERVER then
         end
     end
 
-    function PLUGIN:OnPlayerCorpseCreated(client, entity)
-        if not ix.config.Get("dropItemsOnDeath", false) or not client:GetCharacter() then return end
-        client:SetLocalVar("ragdoll", entity:EntIndex())
-        local character = client:GetCharacter()
-        local charInventory = character:GetInventory()
-        local width, height = charInventory:GetSize()
-        local inventory = ix.inventory.Create(width, height, os.time()) -- create new inventory
-        inventory.noSave = true
-        if ix.config.Get("dropItemsOnDeath") then
-            for _, slot in pairs(charInventory.slots) do
-                for _, item in pairs(slot) do
-                    if item.bDropOnDeath then
-                        if item:GetData("equip") then self:RemoveEquippableItem(client, item) end
-                        item:Transfer(inventory:GetID(), item.gridX, item.gridY)
-                    end
-                end
-            end
-        end
+function PLUGIN:OnPlayerCorpseCreated(client, entity)
+    if not ix.config.Get("dropItemsOnDeath", false) or not client:GetCharacter() then return end
 
-        entity.ixInventory = inventory
+    local character = client:GetCharacter()
+    local inventory = character:GetInventory()
+    local dropPos = entity:GetPos() + Vector(0, 0, 10)
+
+    -- Drop all items in the player's inventory
+    for _, slot in pairs(inventory.slots) do
+        for _, item in pairs(slot) do
+            if IsValid(item.entity) then continue end -- skip if already in-world
+            -- Unequip if equipped
+            if item:GetData("equip") then
+                self:RemoveEquippableItem(client, item)
+            end
+
+            -- Remove and spawn on ground
+            item:Remove()
+            ix.item.Spawn(item.uniqueID, dropPos + VectorRand() * 10, nil, AngleRand())
+        end
     end
+end
+
 
     function PLUGIN:PlayerUse(client, entity)
         if entity:GetClass() == "prop_ragdoll" and entity.ixInventory and not ix.storage.InUse(entity.ixInventory) then

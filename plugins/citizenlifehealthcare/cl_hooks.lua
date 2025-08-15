@@ -30,23 +30,40 @@ function PLUGIN:HUDPaint()
     local character = client:GetCharacter()
     if not character then return end
     local sanity = character:GetSanity() / 100
-    self.nextMessage = self.nextMessage or 0
-    self.messages = self.messages or {}
-    if self.nextMessage < CurTime() then
-        local chance = math_random(90, 100) -- Load of elseif...
-        local nextMessage = math_random(500, 600)
-        if sanity < 0.2 and chance > 40 then
-            self.messages[#self.messages + 1] = {table.Random(self.randomMessages), CurTime() + math_random(12, 45)}
-            nextMessage = math_random(30, 120)
-        elseif sanity < 0.4 and chance > 60 then
-            self.messages[#self.messages + 1] = {table.Random(self.randomMessages), CurTime() + math_random(12, 45)}
-            nextMessage = math_random(300, 460)
-        elseif sanity < 0.6 and chance > 80 then
-            self.messages[#self.messages + 1] = {table.Random(self.randomMessages), CurTime() + math_random(12, 45)}
-        end
 
-        self.nextMessage = CurTime() + nextMessage
+    if sanity >= 100 and self.messages and #self.messages > 0 then
+    table.Empty(self.messages)
+end
+    self.nextMessage = self.nextMessage or 0
+self.messages = self.messages or {}
+
+if self.nextMessage < CurTime() then
+    local chance = math_random(90, 100)
+    local nextMessage = math_random(500, 600)
+
+    if sanity < 0.2 and chance > 40 then
+        for i = 1, math_random(2, 4) do
+            self.messages[#self.messages + 1] = {
+                table.Random(self.randomMessages),
+                CurTime() + math_random(12, 45)
+            }
+        end
+        nextMessage = math_random(20, 40)
+    elseif sanity < 0.4 and chance > 60 then
+        self.messages[#self.messages + 1] = {
+            table.Random(self.randomMessages),
+            CurTime() + math_random(12, 45)
+        }
+        nextMessage = math_random(150, 300)
+    elseif sanity < 0.6 and chance > 80 then
+        self.messages[#self.messages + 1] = {
+            table.Random(self.randomMessages),
+            CurTime() + math_random(12, 45)
+        }
     end
+
+    self.nextMessage = CurTime() + nextMessage
+end
 
     for i, v in ipairs(self.messages) do
         if v[2] < CurTime() then table.remove(self.messages, i) end
@@ -107,6 +124,23 @@ function PLUGIN:RenderScreenspaceEffects()
         DrawSharpen(5, 5)
     end
 
+    if sanity >= 15 then
+    DrawColorModify({
+        ["$pp_colour_addr"] = 0.1,  -- Red additive
+        ["$pp_colour_addg"] = 0,
+        ["$pp_colour_addb"] = 0,
+        ["$pp_colour_brightness"] = -0.05,
+        ["$pp_colour_contrast"] = 1.2,
+        ["$pp_colour_colour"] = 0.5,
+        ["$pp_colour_mulr"] = 0.2,
+        ["$pp_colour_mulg"] = 0,
+        ["$pp_colour_mulb"] = 0
+    })
+
+    surface.SetDrawColor(255, 0, 0, 40) -- Light red screen overlay
+    surface.DrawRect(0, 0, ScrW(), ScrH())
+end
+
     -- Blur for sickness
     local blurStrength = 0
     if sicknessLevel >= 89 then
@@ -134,25 +168,25 @@ function PLUGIN:RenderScreenspaceEffects()
         blurStrength = blurStrength + hungerBlur
     end
 
-    if blurStrength > 0 then
-        DrawMotionBlur(0.1, blurStrength, 0.01)
-    else
-        DrawMotionBlur(0, 0, 0)
-    end
-
     -- Apply saturation changes based on sanity AND stress
     local colMod = {}
     colMod["$pp_colour_colour"] = 0.8
 
-    if sanity < 0.2 then
+    if sanity < 20 then
         colMod["$pp_colour_colour"] = 0.45
-    elseif sanity < 0.4 then
+    elseif sanity < 40 then
         colMod["$pp_colour_colour"] = 0.6
-    elseif sanity < 0.6 then
+    elseif sanity < 60 then
         colMod["$pp_colour_colour"] = 0.7
     end
 
-    -- Stress effect: screen shake and saturation boost
+if stressLevel > 50 then
+    local stressAmount = math.Clamp((stressLevel - 50) / 50, 0, 1) -- Scale from 0 to 1 between 50-100
+    local stressBlur = Lerp(stressAmount, 0.5, 5.2) -- Increased blur range: 0.3 to 1.2
+    blurStrength = blurStrength + stressBlur
+end
+
+    -- Stress effect: screen shake
     if stressLevel > 74 then
         
     -- Screen shake cooldown (every 0.5 seconds)
@@ -176,6 +210,12 @@ else
         self.heartbeatSound:Stop()
     end
 end
+
+    if blurStrength > 0 then
+        DrawMotionBlur(0.1, blurStrength, 0.01)
+    else
+        DrawMotionBlur(0, 0, 0)
+    end
 
     DrawColorModify(colMod)
 end
@@ -242,7 +282,7 @@ function PLUGIN:Think()
     local character = client:GetCharacter()
     if not character then return end
     local sanity = character:GetSanity() / 100
-    if sanity > 0.6 then
+    if sanity < 60 then
         self.nextEvent = CurTime() + 120
         return
     end
@@ -271,7 +311,7 @@ function PLUGIN:PostDrawOpaqueRenderables()
     local character = client:GetCharacter()
     if not character then return end
     local sanity = character:GetSanity() / 100
-    if sanity > 0.2 then self.nextMonster = CurTime() + 120 end
+    if sanity >= 20 then self.nextMonster = CurTime() + 120 end
     if self.nextMonster < CurTime() then
         self.monsters[#self.monsters + 1] = {"models/Humans/Group01/Male_01.mdl", CurTime() + 24}
         self.nextMonster = CurTime() + 300

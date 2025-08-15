@@ -1,8 +1,6 @@
 local PLUGIN = PLUGIN
-
 util.AddNetworkString("TriggerScreenShake")
 util.AddNetworkString("MoodlesIcons")
-
 local function TriggerClientScreenShake(player, duration, intensity, radius, viewpunch) -- Function to trigger screenshake
     net.Start("TriggerScreenShake")
     net.WriteFloat(duration)
@@ -20,7 +18,6 @@ function PLUGIN:EntityTakeDamage(target, dmginfo)
         target:SetNWBool("Ragdolled", true)
         target:SetNWBool("Healed", false)
         target:Freeze(true)
-
         ix.chat.Send(target, "me", "'s body crumbles to the ground.")
         target:SetAction("You Are Unconscious...", 35, function()
             target:SetNWBool("Ragdolled", false)
@@ -47,7 +44,6 @@ end
 
 function PLUGIN:SetupTimer(client, character)
     local steamID = client:SteamID64()
-
     timer.Create("ixWarmth" .. steamID, ix.config.Get("warmthTickTime", 5), 0, function()
         if IsValid(client) and character then
             self:WarmthTick(client, character, ix.config.Get("warmthTickTime", 5))
@@ -60,10 +56,7 @@ end
 function PLUGIN:SetupAllTimers()
     for _, v in ipairs(player.GetAll()) do
         local character = v:GetCharacter()
-
-        if character then
-            self:SetupTimer(v, character)
-        end
+        if character then self:SetupTimer(v, character) end
     end
 end
 
@@ -82,18 +75,10 @@ function PLUGIN:WarmthDisabled()
 end
 
 function PLUGIN:ApplyImmunity(char)
-    local immunityTimer = "Immunity_" .. char:GetID()  -- Assuming each character has a unique ID
-    if timer.Exists(immunityTimer) then
-        timer.Remove(immunityTimer)
-    end
-
-    timer.Create(immunityTimer, 600, 1, function()
-        if IsValid(char) then
-            char:SetData("sickness_immunity", nil)
-        end
-    end)
-
-    char:SetData("immunityTimer", immunityTimer)  -- Store the timer name for later reference
+    local immunityTimer = "Immunity_" .. char:GetID() -- Assuming each character has a unique ID
+    if timer.Exists(immunityTimer) then timer.Remove(immunityTimer) end
+    timer.Create(immunityTimer, 600, 1, function() if IsValid(char) then char:SetData("sickness_immunity", nil) end end)
+    char:SetData("immunityTimer", immunityTimer) -- Store the timer name for later reference
 end
 
 function PLUGIN:PlayerLoadedCharacter(client, character, lastCharacter)
@@ -121,14 +106,8 @@ end
 
 function PLUGIN:PlayerDeath(client)
     local character = client:GetCharacter()
-
-    if timer.Exists("shiver") then
-        timer.Remove("shiver")
-    end
-
-    if character then
-        character:SetWarmth(100)
-    end
+    if timer.Exists("shiver") then timer.Remove("shiver") end
+    if character then character:SetWarmth(100) end
 end
 
 function PLUGIN:WarmthTick(client, character, delta)
@@ -225,17 +204,15 @@ end
 
 local coughSounds = {"ambient/voices/cough1.wav", "ambient/voices/cough2.wav", "ambient/voices/cough3.wav", "ambient/voices/cough4.wav"}
 local coughRadius = 200 -- Define the radius within which coughs affect other players
-
 util.AddNetworkString("TriggerPukeEffect")
-
 function PLUGIN:HandleSicknessEffects(ply, char)
     if char:GetData("sickness_immunity") then
         return -- Skip processing if the player is immune
     end
+
     if ply:GetMoveType() == MOVETYPE_NOCLIP then return end
     if ply.ixSickTick and ply.ixSickTick > CurTime() then return end
-
-    if not ply:Team() == FACTION_CITIZEN then  
+    if not ply:Team() == FACTION_CITIZEN then
         char:SetData("sicknessType", "none")
         char:SetData("sickness", 0)
         return
@@ -246,13 +223,11 @@ function PLUGIN:HandleSicknessEffects(ply, char)
     local currentWarmth = char:GetWarmth()
     local sicknessLevel = char:GetData("sickness", 0)
     local weakness = char:GetData("weakness", 0)
-
     if weakness < 25 then
         return -- Not weak enough to fall sick
     end
 
-    -- Update sickness type based on hunger level
-    if hungerLevel <= 45 and weakness >= 25 and sicknessType == "none" then
+    if hungerLevel <= 45 and weakness >= 25 and sicknessType == "none" then -- Update sickness type based on hunger level
         char:SetData("sicknessType", "starvation")
         sicknessType = "starvation"
     elseif hungerLevel > 85 and sicknessType == "starvation" then
@@ -264,18 +239,14 @@ function PLUGIN:HandleSicknessEffects(ply, char)
         end
     end
 
-    -- Handle sickness based on type
-    if sicknessType == "starvation" then
+    if sicknessType == "starvation" then -- Handle sickness based on type
         if hungerLevel <= 64 and (not ply.nextSicknessIncrease or ply.nextSicknessIncrease <= CurTime()) then
             sicknessLevel = math.Clamp(sicknessLevel + 1, 0, 100)
             ply.nextSicknessIncrease = CurTime() + ix.config.Get("sickTime", 60)
         end
-        if sicknessLevel > 14 then
-            self:HandleCoughing(ply, sicknessLevel)
-        end
-        if sicknessLevel > 49 then
-            self:HandleVomiting(ply, sicknessLevel)
-        end
+
+        if sicknessLevel > 14 then self:HandleCoughing(ply, sicknessLevel) end
+        if sicknessLevel > 49 then self:HandleVomiting(ply, sicknessLevel) end
     elseif sicknessType == "hypothermia" then
         if currentWarmth <= 50 and (not ply.nextSicknessIncrease or ply.nextSicknessIncrease <= CurTime()) then
             sicknessLevel = math.Clamp(sicknessLevel + 1, 0, 100)
@@ -284,9 +255,7 @@ function PLUGIN:HandleSicknessEffects(ply, char)
             sicknessLevel = math.Clamp(sicknessLevel - 1, 0, 100)
         end
     elseif sicknessType == "none" then
-        if sicknessLevel > 0 then
-            sicknessLevel = math.Clamp(sicknessLevel - 0.5, 0, 100)
-        end
+        if sicknessLevel > 0 then sicknessLevel = math.Clamp(sicknessLevel - 0.5, 0, 100) end
     end
 
     char:SetData("sickness", sicknessLevel)
@@ -295,21 +264,14 @@ end
 
 function PLUGIN:HandleCoughing(ply, sicknessLevel)
     local coughTimerName = "Cough_" .. ply:SteamID()
-
     if not timer.Exists(coughTimerName) then
-        if math.random(1, 100) <= 85 then  -- Simulating a chance to cough
+        if math.random(1, 100) <= 85 then -- Simulating a chance to cough
             local coughSound = coughSounds[math.random(#coughSounds)]
             ply:EmitSound(coughSound)
-
-            -- Spread the sickness when coughing
-            self:SpreadSickness(ply, 200)  -- Assuming 200 is the radius in which the sickness can spread
+            self:SpreadSickness(ply, 200) -- Spread the sickness when coughing -- Assuming 200 is the radius in which the sickness can spread
         end
 
-        timer.Create(coughTimerName, math.random(10, 20), 1, function()
-            if IsValid(ply) then
-                self:HandleCoughing(ply, sicknessLevel)
-            end
-        end)
+        timer.Create(coughTimerName, math.random(10, 20), 1, function() if IsValid(ply) then self:HandleCoughing(ply, sicknessLevel) end end)
     end
 end
 
@@ -324,14 +286,9 @@ function PLUGIN:HandleVomiting(ply, sicknessLevel)
         if math.random(1, 100) <= pukeChance then
             ply:TakeDamage(damageAmount, ply, ply)
             char:SetHunger(math.max(0, char:GetHunger() - hungerLoss))
-
-            -- Determine the position and direction to place the decal
-            local pos = ply:GetPos()
+            local pos = ply:GetPos() -- Determine the position and direction to place the decal
             local dir = -ply:GetUp() -- The decal will be projected downward
-
-            -- Add a decal under the player's position
-            util.Decal("decals/antlion/shot2", pos, pos + dir * 10, ply)
-
+            util.Decal("decals/antlion/shot2", pos, pos + dir * 10, ply) -- Add a decal under the player's position
             if sicknessLevel > 65 then
                 ply:EmitSound("citizensounds/puking.wav")
                 ix.chat.Send(ply, "me", "violently projectile vomits.")
@@ -365,7 +322,6 @@ end
 function PLUGIN:SpreadSickness(ply, radius)
     local char = ply:GetCharacter()
     if not char or char:GetData("sicknessType") == "none" then return end
-
     for _, otherPly in ipairs(player.GetAll()) do
         if otherPly ~= ply and otherPly:GetPos():Distance(ply:GetPos()) <= radius then
             local otherChar = otherPly:GetCharacter()
@@ -425,7 +381,6 @@ hook.Add("PlayerDeath", "HungerSystem", function(ply, inf, attacker)
     ply:RemoveDrunkEffect()
     char:SetData("sicknessType", "none")
     char:SetData("sickness_immunity", nil)
-
 end)
 
 hook.Add("PlayerDeath", "WarmthSystem", function(ply, inf, attacker)
@@ -454,45 +409,30 @@ end
 
 util.AddNetworkString("PlayClientSound")
 util.AddNetworkString("StopClientSound")
-
-local stressImpactFactor = 0.1  -- The impact factor determines how much stress affects sanity decay
-
+local stressImpactFactor = 0.3 -- The impact factor determines how much stress affects sanity decay
 function PLUGIN:UpdateSanity(ply)
     if ply.ixSanityTick and ply.ixSanityTick > CurTime() then return end
-
     local char = ply:GetCharacter()
     if not char then return end
-
     local currentSanity = char:GetSanity()
     local decayRate = ix.config.Get("sanityDecayRate", 0.5) + (char:GetData("stress", 0) * stressImpactFactor)
-
-    if ply:GetNWBool("InStressZone") then
-        decayRate = decayRate + ix.config.Get("sanityZoneDecayRate", 1.0)
-    end
-
-    -- Check for nearby positive entities or events
-    local pos = ply:GetPos()
+    if ply:GetNWBool("InStressZone") then decayRate = decayRate + ix.config.Get("sanityZoneDecayRate", 1.0) end
+    local pos = ply:GetPos() -- Check for nearby positive entities or events
     local entities = ents.FindInSphere(pos, 450)
     local isNearPositiveEntity = false
     local teamSanityBonus = 0
-
     for _, ent in ipairs(entities) do
-        if ent:IsPlayer() and ent:Team() == ply:Team() and ent != ply then
-            teamSanityBonus = teamSanityBonus + 0.9  -- You might increase this to a higher value.
+        if ent:IsPlayer() and ent:Team() == ply:Team() and ent ~= ply then
+            teamSanityBonus = teamSanityBonus + 0.9 -- You might increase this to a higher value.
             print("Sanity increased by nearby team member. Current bonus: " .. teamSanityBonus)
         end
-        if (ent:GetClass() == "ix_tv" and ent.IsActivated) or (ent:GetClass() == "ww2_radio" and ent.On) then
-            isNearPositiveEntity = true
-        end
+
+        if (ent:GetClass() == "ix_tv" and ent.IsActivated) or (ent:GetClass() == "ww2_radio" and ent.On) then isNearPositiveEntity = true end
     end
 
-    if isNearPositiveEntity then
-        currentSanity = math.min(100, currentSanity + ix.config.Get("sanityRecoveryRate", 0.3))
-    end
-
+    if isNearPositiveEntity then currentSanity = math.min(100, currentSanity + ix.config.Get("sanityRecoveryRate", 0.3)) end
     currentSanity = math.min(100, currentSanity + teamSanityBonus)
     currentSanity = math.max(0, currentSanity - decayRate)
-
     char:SetSanity(currentSanity)
     ply.ixSanityTick = CurTime() + ix.config.Get("sanityTime", 120)
 end
@@ -500,31 +440,23 @@ end
 function PLUGIN:UpdateStress(ply)
     local char = ply:GetCharacter()
     if not char then return end
-
     local stressLevel = char:GetData("stress", 0)
     local baseDecay = 1
     local stressDecayRate = 0.5
     local updateInterval = 2
-
-    -- Detect nearby VJ Base zombies once per update to share between increase and decay logic
-    local nearbyEntities = ents.FindInSphere(ply:GetPos(), 1000)
+    local nearbyEntities = ents.FindInSphere(ply:GetPos(), 1000) -- Detect nearby VJ Base zombies once per update to share between increase and decay logic
     local zombieCount = 0
     for _, ent in ipairs(nearbyEntities) do
         if IsValid(ent) and ent:IsNPC() then
             local class = ent:GetClass()
-            if string.find(class, "npc_vj_") and (string.find(class, "lnre") or string.find(class, "lnrhl2")) then
-                zombieCount = zombieCount + 1
-            end
+            if string.find(class, "npc_vj_") and (string.find(class, "lnre") or string.find(class, "lnrhl2")) then zombieCount = zombieCount + 1 end
         end
     end
 
-    -- Track the next time to update stress increase
-    if not ply.nextStressIncrease or ply.nextStressIncrease <= CurTime() then
+    if not ply.nextStressIncrease or ply.nextStressIncrease <= CurTime() then -- Track the next time to update stress increase
         ply.nextStressIncrease = CurTime() + updateInterval
         local newStress = stressLevel
-
-        -- Increase stress if a recent death was nearby
-        if ply:GetNWBool("recentDeathNearby") then
+        if ply:GetNWBool("recentDeathNearby") then -- Increase stress if a recent death was nearby
             newStress = math.min(100, newStress + 10)
             print("nearby death")
         end
@@ -537,13 +469,10 @@ function PLUGIN:UpdateStress(ply)
         char:SetData("stress", newStress)
     end
 
-    -- Stress decay ONLY if fewer than 10 zombies
-    if zombieCount < 10 then
+    if zombieCount < 10 then -- Stress decay ONLY if fewer than 10 zombies
         if not ply.nextStressDecay or ply.nextStressDecay <= CurTime() then
             ply.nextStressDecay = CurTime() + updateInterval
-
-            -- Increase decay rate if player is smoking
-            local decay = stressDecayRate
+            local decay = stressDecayRate -- Increase decay rate if player is smoking
             if char:IsSmoking() then
                 decay = decay + 0.5 -- You can adjust this value as needed
                 print("Player is smoking - faster stress decay")
@@ -556,40 +485,26 @@ function PLUGIN:UpdateStress(ply)
         end
     end
 
-    -- Adjust sanity decay based on current stress
-    local stressImpactFactor = 0.02
+    local stressImpactFactor = 0.02 -- Adjust sanity decay based on current stress
     local stressFactor = stressLevel * stressImpactFactor
     local decayRate = baseDecay + stressFactor
     self:UpdateSanity(ply, decayRate)
-
-    -- Reset recent death flag after 30 seconds
-    if ply:GetNWBool("recentDeathNearby") then
-        timer.Simple(30, function()
-            if IsValid(ply) then
-                ply:SetNWBool("recentDeathNearby", false)
-            end
-        end)
+    if ply:GetNWBool("recentDeathNearby") then -- Reset recent death flag after 30 seconds
+        timer.Simple(30, function() if IsValid(ply) then ply:SetNWBool("recentDeathNearby", false) end end)
     end
 end
 
-
 hook.Add("DoPlayerDeath", "SanityOnDeath", function(victim, attacker, dmginfo)
     local radius = 500 -- Radius to check for nearby players
-
-    -- Check all players to see who is within the radius of the victim
-    for _, ply in ipairs(player.GetAll()) do
+    for _, ply in ipairs(player.GetAll()) do -- Check all players to see who is within the radius of the victim
         if ply ~= victim and ply:GetPos():Distance(victim:GetPos()) <= radius then
-            -- Exclude the attacker from stress increase
-            if attacker:IsPlayer() and ply == attacker then
+            if attacker:IsPlayer() and ply == attacker then -- Exclude the attacker from stress increase
                 continue
             end
 
-            -- Set a flag on players near the death to indicate a recent death was nearby
-            ply:SetNWBool("recentDeathNearby", true)
-
-            -- Reset this flag after a brief period to simulate stress response duration
-            timer.Simple(60, function() -- Reset after 60 seconds
-                if IsValid(ply) then
+            ply:SetNWBool("recentDeathNearby", true) -- Set a flag on players near the death to indicate a recent death was nearby
+            timer.Simple(60, function()
+                if IsValid(ply) then -- Reset this flag after a brief period to simulate stress response duration -- Reset after 60 seconds
                     ply:SetNWBool("recentDeathNearby", false)
                 end
             end)
@@ -597,39 +512,10 @@ hook.Add("DoPlayerDeath", "SanityOnDeath", function(victim, attacker, dmginfo)
     end
 end)
 
-ix.config.Add("stressMeleePenaltyMax", 0.40, "Max melee damage reduction applied at 100 stress (melee only).", nil, {
-    data = { min = 0, max = 0.90, decimals = 2 }
-})
-
-local function IsMeleeDamage(dmginfo)
-    return dmginfo:IsDamageType(DMG_CLUB)
-        or dmginfo:IsDamageType(DMG_SLASH)
-        or dmginfo:IsDamageType(DMG_CRUSH)
-end
-
-hook.Add("EntityTakeDamage", "ixStressMeleePenalty", function(target, dmginfo)
-    local attacker = dmginfo:GetAttacker()
-    if not IsValid(attacker) or not attacker:IsPlayer() then return end
-    if not IsMeleeDamage(dmginfo) then return end
-
-    local char = attacker:GetCharacter()
-    if not char then return end
-
-    local stress = tonumber(char:GetData("stress", 0)) or 0
-    if stress <= 0 then return end
-
-    local maxPenalty = tonumber(ix.config.Get("stressMeleePenaltyMax", 0.40)) or 0.40
-    local mult = 1 - math.Clamp(stress / 100, 0, 1) * math.Clamp(maxPenalty, 0, 0.90)
-    mult = math.max(mult, 0.10)
-
-    dmginfo:ScaleDamage(mult)
-end)
-
 function PLUGIN:UpdateWeakness(ply, char)
     if ply.ixWeakTick and ply.ixWeakTick > CurTime() then return end
     local hunger = char:GetHunger()
     local weakness = char:GetData("weakness", 0)
-    
     if hunger < 20 then
         weakness = math.min(weakness + 3, 100) -- Increment weakness if under threshold
     elseif hunger < 40 then
@@ -639,48 +525,36 @@ function PLUGIN:UpdateWeakness(ply, char)
     end
 
     char:SetData("weakness", weakness)
-
-    -- If weakness is below 35, sickness starts to go away
-    if weakness < 35 then
+    if weakness < 35 then -- If weakness is below 35, sickness starts to go away
         local sicknessLevel = char:GetData("sickness", 0)
-        if sicknessLevel > 0 then
-            char:SetData("sickness", math.max(0, sicknessLevel - 10))
-        end
+        if sicknessLevel > 0 then char:SetData("sickness", math.max(0, sicknessLevel - 10)) end
     end
 
-    -- Check if the player should become sick based on weakness
-    if weakness > 45 then
+    if weakness > 45 then -- Check if the player should become sick based on weakness
         local sicknessType = char:GetData("sicknessType", "none")
         if sicknessType == "none" then
             local increaseChance = weakness - 25 -- Increase chances as weakness grows
-            if math.random(100) < increaseChance then
-                char:SetData("sicknessType", "starvation")
-            end
+            if math.random(100) < increaseChance then char:SetData("sicknessType", "starvation") end
         end
     end
 
-    -- Only increase sickness level if the sickness type is "starvation"
-    if char:GetData("sicknessType") == "starvation" then
+    if char:GetData("sicknessType") == "starvation" then -- Only increase sickness level if the sickness type is "starvation"
         local currentSickness = char:GetData("sickness", 0)
         char:SetData("sickness", math.min(currentSickness + 1, 100))
     end
 
-    -- Scale player model bones based on weakness, excluding the head bone
-    local scale = 1 - (weakness / 750) -- Example: scale down to a minimum of 0.5 size
+    local scale = 1 - (weakness / 750) -- Scale player model bones based on weakness, excluding the head bone -- Example: scale down to a minimum of 0.5 size
     local bones = ply:GetBoneCount() or 0
     for i = 0, bones - 1 do
         local boneName = ply:GetBoneName(i)
-        -- Skip scaling for the head bone
-        if boneName and boneName ~= "ValveBiped.Bip01_Head" then
+        if boneName and boneName ~= "ValveBiped.Bip01_Head" then -- Skip scaling for the head bone
             ply:ManipulateBoneScale(i, Vector(scale, scale, scale))
         else
-            -- Reset head bone to default scale to ensure no unintended scaling
-            ply:ManipulateBoneScale(i, Vector(1, 1, 1))
+            ply:ManipulateBoneScale(i, Vector(1, 1, 1)) -- Reset head bone to default scale to ensure no unintended scaling
         end
     end
 
-    -- More effective recovery when resting
-    if ply:GetNWBool("IsActing") then
+    if ply:GetNWBool("IsActing") then -- More effective recovery when resting
         char:SetData("weakness", math.max(0, weakness - 5))
     end
 
