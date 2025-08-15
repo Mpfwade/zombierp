@@ -559,6 +559,7 @@ hook.Add("PlayerDeath", "StopSoundOnDeath", function(ply)
     end
 end)
 
+
 local zombie_model = "models/vj_lnre/nh2/patient01.mdl"
 local sanity_threshold = 40
 local max_range_sqr = 900*900
@@ -567,8 +568,9 @@ local only_others = true
 local zombie_skin = 0
 local bodygroup_hints = {"head","sever","decap"}
 
-local hall = hall or {}
-local function is_hall(p) return hall[p] and IsValid(hall[p]) end
+local hall = hall or {}      -- ply -> { cs=Clientsidemodel, last_draw=0 }
+local drawn_frame = 0        -- frame counter
+hook.Add("Think","ix_insanity_framecount",function() drawn_frame = drawn_frame + 1 end)
 
 local function have_model()
     return util.IsValidModel(zombie_model)
@@ -577,6 +579,7 @@ end
 local function apply_headless(cs)
     if not IsValid(cs) then return end
     cs:SetSkin(zombie_skin or 0)
+
     local n = cs:GetNumBodyGroups() or 0
     local set_any = false
     for i = 0, n - 1 do
@@ -592,32 +595,33 @@ local function apply_headless(cs)
             end
         end
     end
-    -- fallback hide head bone
     if not set_any then
         local b = cs:LookupBone("ValveBiped.Bip01_Head1") or cs:LookupBone("head") or cs:LookupBone("Head")
         if b then cs:ManipulateBoneScale(b, Vector(0,0,0)) end
     end
 end
 
-local function mk_cs()
+local function make_cs()
     if not have_model() then return nil end
     local cs = ClientsideModel(zombie_model, RENDERGROUP_OPAQUE)
     if not IsValid(cs) then return nil end
-    cs:SetNoDraw(true)
+    cs:SetNoDraw(true) -- we draw manually
     apply_headless(cs)
     return cs
 end
 
 local function add_zombie(p)
-    if is_hall(p) then return end
-    local cs = mk_cs()
+    local rec = hall[p]
+    if rec and IsValid(rec.cs) then return end
+    local cs = make_cs()
     if not IsValid(cs) then return end
-    hall[p] = cs
+    hall[p] = { cs = cs, last_draw = 0 }
 end
 
 local function remove_zombie(p)
-    local cs = hall[p]
-    if IsValid(cs) then cs:Remove() end
+    local rec = hall[p]
+    if not rec then return end
+    if IsValid(rec.cs) then rec.cs:Remove() end
     hall[p] = nil
 end
 
@@ -630,25 +634,27 @@ local function should_swap(p, lp, sanity)
     return true
 end
 
-hook.Add("PrePlayerDraw","ix_insanity_hide_real_v3", function(p)
-    if is_hall(p) then
+-- only hide the real player if we actually have a valid cs AND drew it this frame (or will draw in fallback)
+hook.Add("PrePlayerDraw","ix_insanity_hide_real_v4", function(p)
+    local rec = hall[p]
+    if rec and IsValid(rec.cs) then
         return true
     end
 end)
 
-hook.Add("PostPlayerDraw","ix_insanity_draw_zombie_v3", function(p)
-    local cs = hall[p]
-    if not IsValid(cs) then return end
+-- try drawing during player render
+hook.Add("PostPlayerDraw","ix_insanity_draw_playerhook_v4", function(p)
+    local rec = hall[p]
+    if not rec or not IsValid(rec.cs) then return end
+    local cs = rec.cs
 
-    
     cs:SetRenderOrigin(p:GetPos())
     cs:SetRenderAngles(Angle(0, p:EyeAngles().y, 0))
-
     cs:SetSequence(p:GetSequence())
     cs:SetCycle(p:GetCycle())
     cs:SetPlaybackRate(p:GetPlaybackRate())
 
-    for i=0, p:GetNumPoseParameters()-1 do
+    for i = 0, p:GetNumPoseParameters()-1 do
         local name = p:GetPoseParameterName(i)
         if name then cs:SetPoseParameter(name, p:GetPoseParameter(i)) end
     end
@@ -656,9 +662,31 @@ hook.Add("PostPlayerDraw","ix_insanity_draw_zombie_v3", function(p)
     cs:FrameAdvance(FrameTime())
     cs:SetupBones()
     cs:DrawModel()
+
+    rec.last_draw = drawn_frame
 end)
 
-timer.Create("ix_insanity_zombify_v3", 0.3, 0, function()
+-- guaranteed fallback draw
+hook.Add("PostDrawOpaqueRenderables","ix_insanity_fallbackdraw_v4", function()
+    for p, rec in pairs(hall) do
+        if not IsValid(p) or not rec or not IsValid(rec.cs) then goto cont end
+        if rec.last_draw == drawn_frame then goto cont end -- already drawn in PostPlayerDraw
+
+        local cs = rec.cs
+        cs:SetRenderOrigin(p:GetPos())
+        cs:SetRenderAngles(Angle(0, p:EyeAngles().y, 0))
+
+        -- keep anim roughly alive even if we can’t read pose here
+        cs:FrameAdvance(FrameTime())
+        cs:SetupBones()
+        cs:DrawModel()
+
+        rec.last_draw = drawn_frame
+        ::cont::
+    end
+end)
+
+timer.Create("ix_insanity_zombify_v4", 0.3, 0, function()
     local lp = LocalPlayer()
     if not IsValid(lp) then return end
     local ch = lp:GetCharacter()
@@ -666,6 +694,7 @@ timer.Create("ix_insanity_zombify_v3", 0.3, 0, function()
         for p,_ in pairs(hall) do remove_zombie(p) end
         return
     end
+
     local sanity = ch:GetSanity() or 100
 
     for _,p in ipairs(player.GetAll()) do
@@ -676,15 +705,15 @@ timer.Create("ix_insanity_zombify_v3", 0.3, 0, function()
         end
     end
 
-    -- cleanup invalids
     for p,_ in pairs(hall) do
-        if not IsValid(p) or sanity > sanity_threshold then
+        if (not IsValid(p)) or sanity > sanity_threshold then
             remove_zombie(p)
         end
     end
 end)
 
-hook.Add("PlayerRemoved","ix_insanity_zombify_cleanup_v3", function(p) remove_zombie(p) end)
-hook.Add("ShutDown","ix_insanity_zombify_shutdown_v3", function()
+-- cleanup
+hook.Add("PlayerRemoved","ix_insanity_zombify_cleanup_v4", function(p) remove_zombie(p) end)
+hook.Add("ShutDown","ix_insanity_zombify_shutdown_v4", function()
     for p,_ in pairs(hall) do remove_zombie(p) end
 end)
