@@ -1,0 +1,8 @@
+"zombierp"
+{
+	"base"		"helix"
+	"title"		"Zombie Rp"
+	"author"	"nebulous.cloud"
+	"category"	"rp"
+	"menusystem" "1"
+}
