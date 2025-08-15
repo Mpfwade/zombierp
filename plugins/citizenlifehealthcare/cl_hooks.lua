@@ -560,15 +560,20 @@ hook.Add("PlayerDeath", "StopSoundOnDeath", function(ply)
 end)
 
 
+-- insanity zombify v4 FIXED
 local zombie_model = "models/vj_lnre/nh2/patient01.mdl"
 local sanity_threshold = 40
-local max_range_sqr = 900 * 900
+local max_range_sqr = 900*900
 local only_others = true
-
 local zombie_skin = 0
-local bodygroup_hints = { "head", "sever", "decap" }
+local bodygroup_hints = {"head","sever","decap"}
 
-local hall = hall or {} -- ply -> { cs = ClientsideModel }
+local hall = hall or {} -- ply -> { cs=Clientsidemodel, last_draw=0 }
+local drawn_frame = 0 -- frame counter
+
+hook.Add("Think","ix_insanity_framecount",function()
+    drawn_frame = drawn_frame + 1
+end)
 
 local function have_model()
     return util.IsValidModel(zombie_model)
@@ -576,13 +581,15 @@ end
 
 local function apply_headless(cs)
     if not IsValid(cs) then return end
+    
     cs:SetSkin(zombie_skin or 0)
-
+    
     local n = cs:GetNumBodyGroups() or 0
     local set_any = false
+    
     for i = 0, n - 1 do
         local name = string.lower(cs:GetBodygroupName(i) or "")
-        for _, h in ipairs(bodygroup_hints) do
+        for _,h in ipairs(bodygroup_hints) do
             if name:find(h, 1, true) then
                 local cnt = cs:GetBodygroupCount(i) or 0
                 if cnt > 1 then
@@ -593,43 +600,47 @@ local function apply_headless(cs)
             end
         end
     end
-
+    
     if not set_any then
         local b = cs:LookupBone("ValveBiped.Bip01_Head1") or cs:LookupBone("head") or cs:LookupBone("Head")
-        if b then cs:ManipulateBoneScale(b, Vector(0, 0, 0)) end
+        if b then
+            cs:ManipulateBoneScale(b, Vector(0,0,0))
+        end
     end
 end
 
-local function make_cs(ply)
+local function make_cs()
     if not have_model() then return nil end
-    local cs = ClientsideModel(zombie_model, RENDERGROUP_BOTH)
-    if not IsValid(cs) then return nil end
-    cs:SetNoDraw(true)
-    cs:SetModel(zombie_model)
-    cs:SetSkin(zombie_skin or 0)
-
     
-    cs:SetParent(ply)
-    cs:AddEffects(EF_BONEMERGE)
-    cs:AddEffects(EF_PARENT_ANIMATES)
-    cs:AddEffects(EF_BONEMERGE_FASTCULL)
-
+    local cs = ClientsideModel(zombie_model, RENDERGROUP_OPAQUE)
+    if not IsValid(cs) then return nil end
+    
+    cs:SetNoDraw(true) -- we draw manually
     apply_headless(cs)
+    
     return cs
 end
 
 local function add_zombie(p)
     local rec = hall[p]
     if rec and IsValid(rec.cs) then return end
-    local cs = make_cs(p)
+    
+    local cs = make_cs()
     if not IsValid(cs) then return end
-    hall[p] = { cs = cs }
+    
+    hall[p] = {
+        cs = cs,
+        last_draw = 0
+    }
 end
 
 local function remove_zombie(p)
     local rec = hall[p]
     if not rec then return end
-    if IsValid(rec.cs) then rec.cs:Remove() end
+    
+    if IsValid(rec.cs) then
+        rec.cs:Remove()
+    end
     hall[p] = nil
 end
 
@@ -642,56 +653,135 @@ local function should_swap(p, lp, sanity)
     return true
 end
 
--- draw zombie and hide real model in the same hook
-hook.Add("PrePlayerDraw", "ix_insanity_draw_and_hide_v5", function(p)
+-- Hide the real player model
+hook.Add("PrePlayerDraw","ix_insanity_hide_real_v4", function(p)
     local rec = hall[p]
-    if not rec or not IsValid(rec.cs) then return end
-    local cs = rec.cs
-
-    if cs:GetParent() ~= p then
-        cs:SetParent(p)
-        cs:RemoveEffects(EF_BONEMERGE)
-        cs:AddEffects(EF_BONEMERGE)
-        cs:AddEffects(EF_PARENT_ANIMATES)
-        cs:AddEffects(EF_BONEMERGE_FASTCULL)
+    if rec and IsValid(rec.cs) then
+        return true -- Hide the real player
     end
-
-    cs:DrawModel()
-    return true -- hide real player
 end)
 
--- decide who is swapped based on sanity + distance
-timer.Create("ix_insanity_zombify_v5", 0.3, 0, function()
+-- Draw zombie model during player render
+hook.Add("PostPlayerDraw","ix_insanity_draw_playerhook_v4", function(p)
+    local rec = hall[p]
+    if not rec or not IsValid(rec.cs) then return end
+    
+    local cs = rec.cs
+    
+    -- Copy player position and rotation
+    cs:SetPos(p:GetPos())
+    cs:SetAngles(Angle(0, p:EyeAngles().y, 0))
+    
+    -- Copy animation data
+    local seq = p:GetSequence()
+    if seq and seq >= 0 then
+        cs:SetSequence(seq)
+        cs:SetCycle(p:GetCycle())
+        cs:SetPlaybackRate(p:GetPlaybackRate())
+    end
+    
+    -- Copy pose parameters
+    for i = 0, p:GetNumPoseParameters()-1 do
+        local name = p:GetPoseParameterName(i)
+        if name then
+            cs:SetPoseParameter(name, p:GetPoseParameter(i))
+        end
+    end
+    
+    -- Update animation and draw
+    cs:FrameAdvance(FrameTime())
+    cs:SetupBones()
+    cs:DrawModel()
+    
+    rec.last_draw = drawn_frame
+end)
+
+-- Fallback drawing system
+hook.Add("PostDrawOpaqueRenderables","ix_insanity_fallbackdraw_v4", function()
+    for p, rec in pairs(hall) do
+        if not IsValid(p) or not rec or not IsValid(rec.cs) then
+            goto cont
+        end
+        
+        -- Skip if already drawn this frame
+        if rec.last_draw == drawn_frame then
+            goto cont
+        end
+        
+        local cs = rec.cs
+        
+        -- Update position and basic animation
+        cs:SetPos(p:GetPos())
+        cs:SetAngles(Angle(0, p:EyeAngles().y, 0))
+        
+        -- Keep animation alive
+        cs:FrameAdvance(FrameTime())
+        cs:SetupBones()
+        cs:DrawModel()
+        
+        rec.last_draw = drawn_frame
+        
+        ::cont::
+    end
+end)
+
+-- Main logic timer
+timer.Create("ix_insanity_zombify_v4", 0.3, 0, function()
     local lp = LocalPlayer()
     if not IsValid(lp) then return end
-
+    
     local ch = lp:GetCharacter()
     if not ch then
-        for p, _ in pairs(hall) do remove_zombie(p) end
+        -- Clean up if no character
+        for p,_ in pairs(hall) do
+            remove_zombie(p)
+        end
         return
     end
-
-    local sanity = ch.GetSanity and ch:GetSanity() or 100
-
-    -- keep set in sync
-    for _, p in ipairs(player.GetAll()) do
+    
+    local sanity = ch:GetSanity() or 100
+    
+    -- Check all players
+    for _,p in ipairs(player.GetAll()) do
         if should_swap(p, lp, sanity) then
             add_zombie(p)
         else
             remove_zombie(p)
         end
     end
-
-    -- final cleanup pass
-    for p, _ in pairs(hall) do
+    
+    -- Clean up invalid entries
+    for p,_ in pairs(hall) do
         if (not IsValid(p)) or sanity > sanity_threshold then
             remove_zombie(p)
         end
     end
 end)
 
--- cleanup
-hook.Add("PlayerRemoved", "ix_insanity_zombify_cleanup_v5", function(p) remove_zombie(p) end)
-hook.Add("ShutDown", "ix_insanity_zombify_shutdown_v5", function()
-    for p, _ in pairs(hall) do remove_zombie(p) end
+-- Cleanup hooks
+hook.Add("PlayerRemoved","ix_insanity_zombify_cleanup_v4", function(p)
+    remove_zombie(p)
+end)
+
+hook.Add("ShutDown","ix_insanity_zombify_shutdown_v4", function()
+    for p,_ in pairs(hall) do
+        remove_zombie(p)
+    end
+end)
+
+-- Debug command to test the system
+concommand.Add("test_zombify", function()
+    local lp = LocalPlayer()
+    if not IsValid(lp) then return end
+    
+    print("Testing zombify system...")
+    print("Valid model:", have_model())
+    print("Current sanity threshold:", sanity_threshold)
+    print("Zombie entries:", table.Count(hall))
+    
+    for p, rec in pairs(hall) do
+        if IsValid(p) and rec and IsValid(rec.cs) then
+            print("Zombie active for:", p:Name())
+        end
+    end
 end)
