@@ -567,23 +567,16 @@ local only_others = true
 local zombie_skin = 0
 local bodygroup_hints = {"head","sever","decap"}
 
-local hall = hall or {} -- ply -> cs
+local hall = hall or {}
+local function is_hall(p) return hall[p] and IsValid(hall[p]) end
 
-
-timer.Simple(0, function()
-    for _,p in ipairs(player.GetAll()) do
-        if IsValid(p) and p._ix_insanity_nodraw then
-            p:SetNoDraw(false)
-            p._ix_insanity_nodraw = nil
-        end
-    end
-end)
+local function have_model()
+    return util.IsValidModel(zombie_model)
+end
 
 local function apply_headless(cs)
     if not IsValid(cs) then return end
     cs:SetSkin(zombie_skin or 0)
-
-    -- try bodygroup last index
     local n = cs:GetNumBodyGroups() or 0
     local set_any = false
     for i = 0, n - 1 do
@@ -599,22 +592,26 @@ local function apply_headless(cs)
             end
         end
     end
-
-    -- fallback hide head bone if no bodygroup matched
+    -- fallback hide head bone
     if not set_any then
         local b = cs:LookupBone("ValveBiped.Bip01_Head1") or cs:LookupBone("head") or cs:LookupBone("Head")
         if b then cs:ManipulateBoneScale(b, Vector(0,0,0)) end
     end
 end
 
-local function add_zombie(p)
-    if hall[p] and IsValid(hall[p]) then return end
-    local cs = ClientsideModel(zombie_model, RENDERGROUP_BOTH)
-    if not IsValid(cs) then return end
-    cs:AddEffects(bit.bor(EF_BONEMERGE, EF_BONEMERGE_FASTCULL, EF_PARENT_ANIMATES))
-    cs:SetParent(p)
-    cs:SetNoDraw(false)
+local function mk_cs()
+    if not have_model() then return nil end
+    local cs = ClientsideModel(zombie_model, RENDERGROUP_OPAQUE)
+    if not IsValid(cs) then return nil end
+    cs:SetNoDraw(true)
     apply_headless(cs)
+    return cs
+end
+
+local function add_zombie(p)
+    if is_hall(p) then return end
+    local cs = mk_cs()
+    if not IsValid(cs) then return end
     hall[p] = cs
 end
 
@@ -633,15 +630,35 @@ local function should_swap(p, lp, sanity)
     return true
 end
 
--- hide the real model
-hook.Add("PrePlayerDraw","ix_insanity_hide_real_v2", function(p)
-    if hall[p] and IsValid(hall[p]) then
+hook.Add("PrePlayerDraw","ix_insanity_hide_real_v3", function(p)
+    if is_hall(p) then
         return true
     end
 end)
 
--- light tick that manages swaps
-timer.Create("ix_insanity_zombify_v2", 0.25, 0, function()
+hook.Add("PostPlayerDraw","ix_insanity_draw_zombie_v3", function(p)
+    local cs = hall[p]
+    if not IsValid(cs) then return end
+
+    
+    cs:SetRenderOrigin(p:GetPos())
+    cs:SetRenderAngles(Angle(0, p:EyeAngles().y, 0))
+
+    cs:SetSequence(p:GetSequence())
+    cs:SetCycle(p:GetCycle())
+    cs:SetPlaybackRate(p:GetPlaybackRate())
+
+    for i=0, p:GetNumPoseParameters()-1 do
+        local name = p:GetPoseParameterName(i)
+        if name then cs:SetPoseParameter(name, p:GetPoseParameter(i)) end
+    end
+
+    cs:FrameAdvance(FrameTime())
+    cs:SetupBones()
+    cs:DrawModel()
+end)
+
+timer.Create("ix_insanity_zombify_v3", 0.3, 0, function()
     local lp = LocalPlayer()
     if not IsValid(lp) then return end
     local ch = lp:GetCharacter()
@@ -649,7 +666,6 @@ timer.Create("ix_insanity_zombify_v2", 0.25, 0, function()
         for p,_ in pairs(hall) do remove_zombie(p) end
         return
     end
-
     local sanity = ch:GetSanity() or 100
 
     for _,p in ipairs(player.GetAll()) do
@@ -660,15 +676,15 @@ timer.Create("ix_insanity_zombify_v2", 0.25, 0, function()
         end
     end
 
+    -- cleanup invalids
     for p,_ in pairs(hall) do
-        if (not IsValid(p)) or sanity > sanity_threshold then
+        if not IsValid(p) or sanity > sanity_threshold then
             remove_zombie(p)
         end
     end
 end)
 
--- cleanup
-hook.Add("PlayerRemoved","ix_insanity_zombify_cleanup_v2", function(p) remove_zombie(p) end)
-hook.Add("ShutDown","ix_insanity_zombify_shutdown_v2", function()
+hook.Add("PlayerRemoved","ix_insanity_zombify_cleanup_v3", function(p) remove_zombie(p) end)
+hook.Add("ShutDown","ix_insanity_zombify_shutdown_v3", function()
     for p,_ in pairs(hall) do remove_zombie(p) end
 end)
