@@ -561,7 +561,7 @@ end)
 
 
 -- insanity zombify v4 FIXED
-local zombie_model = "models/vj_lnre/nh2/patient01.mdl"
+local zombie_model = "models/Humans/Group01/Male_Cheaple.mdl"
 local sanity_threshold = 40
 local max_range_sqr = 900*900
 local only_others = true
