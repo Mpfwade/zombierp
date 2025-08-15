@@ -597,6 +597,34 @@ hook.Add("DoPlayerDeath", "SanityOnDeath", function(victim, attacker, dmginfo)
     end
 end)
 
+ix.config.Add("stressMeleePenaltyMax", 0.40, "Max melee damage reduction applied at 100 stress (melee only).", nil, {
+    data = { min = 0, max = 0.90, decimals = 2 }
+})
+
+local function IsMeleeDamage(dmginfo)
+    return dmginfo:IsDamageType(DMG_CLUB)
+        or dmginfo:IsDamageType(DMG_SLASH)
+        or dmginfo:IsDamageType(DMG_CRUSH)
+end
+
+hook.Add("EntityTakeDamage", "ixStressMeleePenalty", function(target, dmginfo)
+    local attacker = dmginfo:GetAttacker()
+    if not IsValid(attacker) or not attacker:IsPlayer() then return end
+    if not IsMeleeDamage(dmginfo) then return end
+
+    local char = attacker:GetCharacter()
+    if not char then return end
+
+    local stress = tonumber(char:GetData("stress", 0)) or 0
+    if stress <= 0 then return end
+
+    local maxPenalty = tonumber(ix.config.Get("stressMeleePenaltyMax", 0.40)) or 0.40
+    local mult = 1 - math.Clamp(stress / 100, 0, 1) * math.Clamp(maxPenalty, 0, 0.90)
+    mult = math.max(mult, 0.10)
+
+    dmginfo:ScaleDamage(mult)
+end)
+
 function PLUGIN:UpdateWeakness(ply, char)
     if ply.ixWeakTick and ply.ixWeakTick > CurTime() then return end
     local hunger = char:GetHunger()
