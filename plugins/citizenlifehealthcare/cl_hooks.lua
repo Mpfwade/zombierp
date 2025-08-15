@@ -560,104 +560,115 @@ hook.Add("PlayerDeath", "StopSoundOnDeath", function(ply)
 end)
 
 local zombie_model = "models/vj_lnre/nh2/patient01.mdl"
-local sanity_threshold = 40      
-local max_range_sqr = (900)^2    
-local only_other_players = true
+local sanity_threshold = 40
+local max_range_sqr = 900*900
+local only_others = true
 
-local zombie_skin = 0            
-local bodygroup_hints = { "head", "sever", "decap" }
+local zombie_skin = 0
+local bodygroup_hints = {"head","sever","decap"}
 
-local hallucinated = hallucinated or {}
+local hall = hall or {} -- ply -> cs
 
-local function apply_headless(csm)
-    if not IsValid(csm) then return end
-    csm:SetSkin(zombie_skin or 0)
-    local n = csm:GetNumBodyGroups() or 0
+
+timer.Simple(0, function()
+    for _,p in ipairs(player.GetAll()) do
+        if IsValid(p) and p._ix_insanity_nodraw then
+            p:SetNoDraw(false)
+            p._ix_insanity_nodraw = nil
+        end
+    end
+end)
+
+local function apply_headless(cs)
+    if not IsValid(cs) then return end
+    cs:SetSkin(zombie_skin or 0)
+
+    -- try bodygroup last index
+    local n = cs:GetNumBodyGroups() or 0
+    local set_any = false
     for i = 0, n - 1 do
-        local name = string.lower(csm:GetBodygroupName(i) or "")
-        for _, hint in ipairs(bodygroup_hints) do
-            if name:find(hint, 1, true) then
-                local info = csm:GetBodygroup(i)
-                local max = info and info.num and (info.num - 1) or 0
-                if max > 0 then csm:SetBodygroup(i, max) end
+        local name = string.lower(cs:GetBodygroupName(i) or "")
+        for _,h in ipairs(bodygroup_hints) do
+            if name:find(h, 1, true) then
+                local cnt = cs:GetBodygroupCount(i) or 0
+                if cnt > 1 then
+                    cs:SetBodygroup(i, cnt - 1)
+                    set_any = true
+                end
                 break
             end
         end
     end
-end
 
-local function add_hallucination(ply)
-    local rec = hallucinated[ply]
-    if rec and IsValid(rec.cs) then return end
-
-    local cs = ClientsideModel(zombie_model, RENDERGROUP_BOTH)
-    if not IsValid(cs) then return end
-
-    cs:AddEffects(bit.bor(EF_BONEMERGE, EF_BONEMERGE_FASTCULL, EF_PARENT_ANIMATES))
-    cs:SetParent(ply)
-    cs:SetNoDraw(false)
-    apply_headless(cs)
-
-    ply._ix_insanity_nodraw = true
-    ply:SetNoDraw(true)
-
-    hallucinated[ply] = { cs = cs }
-end
-
-local function remove_hallucination(ply)
-    local rec = hallucinated[ply]
-    if not rec then return end
-    if IsValid(rec.cs) then rec.cs:Remove() end
-    hallucinated[ply] = nil
-    if IsValid(ply) and ply._ix_insanity_nodraw then
-        ply:SetNoDraw(false)
-        ply._ix_insanity_nodraw = nil
+    -- fallback hide head bone if no bodygroup matched
+    if not set_any then
+        local b = cs:LookupBone("ValveBiped.Bip01_Head1") or cs:LookupBone("head") or cs:LookupBone("Head")
+        if b then cs:ManipulateBoneScale(b, Vector(0,0,0)) end
     end
 end
 
-local function can_swap(ply, lp, sanity)
-    if not IsValid(ply) then return false end
-    if only_other_players and ply == lp then return false end
-    if not ply:Alive() then return false end
-    if lp:GetPos():DistToSqr(ply:GetPos()) > max_range_sqr then return false end
-    if sanity > sanity_threshold then return false end
+local function add_zombie(p)
+    if hall[p] and IsValid(hall[p]) then return end
+    local cs = ClientsideModel(zombie_model, RENDERGROUP_BOTH)
+    if not IsValid(cs) then return end
+    cs:AddEffects(bit.bor(EF_BONEMERGE, EF_BONEMERGE_FASTCULL, EF_PARENT_ANIMATES))
+    cs:SetParent(p)
+    cs:SetNoDraw(false)
+    apply_headless(cs)
+    hall[p] = cs
+end
+
+local function remove_zombie(p)
+    local cs = hall[p]
+    if IsValid(cs) then cs:Remove() end
+    hall[p] = nil
+end
+
+local function should_swap(p, lp, sanity)
+    if not IsValid(p) then return false end
+    if only_others and p == lp then return false end
+    if not p:Alive() then return false end
+    if lp:GetPos():DistToSqr(p:GetPos()) > max_range_sqr then return false end
+    if (sanity or 100) > sanity_threshold then return false end
     return true
 end
 
+-- hide the real model
+hook.Add("PrePlayerDraw","ix_insanity_hide_real_v2", function(p)
+    if hall[p] and IsValid(hall[p]) then
+        return true
+    end
+end)
 
-hook.Add("Think", "ix_insanity_zombify", function()
+-- light tick that manages swaps
+timer.Create("ix_insanity_zombify_v2", 0.25, 0, function()
     local lp = LocalPlayer()
     if not IsValid(lp) then return end
-    local char = lp:GetCharacter()
-    if not char then
-        for p,_ in pairs(hallucinated) do remove_hallucination(p) end
+    local ch = lp:GetCharacter()
+    if not ch then
+        for p,_ in pairs(hall) do remove_zombie(p) end
         return
     end
-    local sanity = char:GetSanity() or 100
 
-    
-    for _, p in ipairs(player.GetAll()) do
-        if can_swap(p, lp, sanity) then
-            add_hallucination(p)
+    local sanity = ch:GetSanity() or 100
+
+    for _,p in ipairs(player.GetAll()) do
+        if should_swap(p, lp, sanity) then
+            add_zombie(p)
         else
-            remove_hallucination(p)
+            remove_zombie(p)
         end
     end
 
-    
-    for p,_ in pairs(hallucinated) do
+    for p,_ in pairs(hall) do
         if (not IsValid(p)) or sanity > sanity_threshold then
-            remove_hallucination(p)
+            remove_zombie(p)
         end
     end
 end)
 
--- cleanup on death / shutdown
-hook.Add("PlayerDeath", "ix_insanity_zombify_cleanup_death", function(p)
-    if p == LocalPlayer() then
-        for other,_ in pairs(hallucinated) do remove_hallucination(other) end
-    end
-end)
-hook.Add("ShutDown", "ix_insanity_zombify_cleanup_shutdown", function()
-    for p,_ in pairs(hallucinated) do remove_hallucination(p) end
+-- cleanup
+hook.Add("PlayerRemoved","ix_insanity_zombify_cleanup_v2", function(p) remove_zombie(p) end)
+hook.Add("ShutDown","ix_insanity_zombify_shutdown_v2", function()
+    for p,_ in pairs(hall) do remove_zombie(p) end
 end)
