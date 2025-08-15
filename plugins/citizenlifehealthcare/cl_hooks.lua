@@ -153,15 +153,12 @@ function PLUGIN:RenderScreenspaceEffects()
     end
 
     -- Stress effect: screen shake and saturation boost
-    if stressLevel > 80 then
-    -- Dynamically increase blur strength based on stress level
-    local stressBlur = Lerp((stressLevel - 65) / 35, 0.2, 0.7)
-    blurStrength = blurStrength + stressBlur
-
+    if stressLevel > 74 then
+        
     -- Screen shake cooldown (every 0.5 seconds)
     self.nextStressShake = self.nextStressShake or 0
     if self.nextStressShake < CurTime() then
-        util.ScreenShake(client:GetPos(), 2, 5, 0.75, 200)
+        util.ScreenShake(client:GetPos(), 1, 5, 0.75, 200)
         self.nextStressShake = CurTime() + 0.2
     end
 
