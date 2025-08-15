@@ -616,7 +616,7 @@ function PLUGIN:UpdateWeakness(ply, char)
     if weakness < 35 then
         local sicknessLevel = char:GetData("sickness", 0)
         if sicknessLevel > 0 then
-            char:SetData("sickness", math.max(0, sicknessLevel - 1))
+            char:SetData("sickness", math.max(0, sicknessLevel - 10))
         end
     end
 
