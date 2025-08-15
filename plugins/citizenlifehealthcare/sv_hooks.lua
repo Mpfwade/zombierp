@@ -530,7 +530,7 @@ function PLUGIN:UpdateStress(ply)
         end
 
         if zombieCount > 5 then
-            newStress = math.min(100, newStress + 0.1 * zombieCount)
+            newStress = math.min(100, newStress + 0.3 * zombieCount)
             print("nearby zombies: " .. zombieCount)
         end
 

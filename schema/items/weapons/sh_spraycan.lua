@@ -5,5 +5,4 @@ ITEM.class = "graffiti-swep"
 ITEM.weaponCategory = "melee"
 ITEM.width = 1
 ITEM.height = 1
-ITEM.illegal = true
 ITEM.bDropOnDeath = true
