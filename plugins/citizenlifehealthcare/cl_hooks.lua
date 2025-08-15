@@ -518,3 +518,127 @@ hook.Add("PlayerDeath", "StopSoundOnDeath", function(ply)
         print("Sound stopped on death") -- Debug output
     end
 end)
+
+local zombie_model = "models/vj_lnre/nh2/patient01.mdl"
+local sanity_threshold = 40
+local max_range_sqr = (900)^2
+local only_other_players = true
+
+local zombie_skin = 0
+local zombie_bodygroup_hints = { "head", "sever", "decap" }
+
+PLUGIN._hallucinated = PLUGIN._hallucinated or {}
+
+local function applyHeadlessSetup(csm)
+    if not IsValid(csm) then return end
+    csm:SetSkin(zombie_skin or 0)
+
+    -- try to set any bodygroup that looks like a head to last index
+    local n = csm:GetNumBodyGroups() or 0
+    for i = 0, n - 1 do
+        local name = string.lower(csm:GetBodygroupName(i) or "")
+        for _, hint in ipairs(zombie_bodygroup_hints) do
+            if name:find(hint, 1, true) then
+                local info = csm:GetBodygroup(i)
+                local max = info and info.num and (info.num - 1) or 0
+                if max > 0 then
+                    csm:SetBodygroup(i, max)
+                end
+                break
+            end
+        end
+    end
+end
+
+local function makeHallucinationFor(ply)
+    local t = PLUGIN._hallucinated[ply]
+    if t and IsValid(t.cs) then return t end
+
+    local cs = ClientsideModel(zombie_model, RENDERGROUP_BOTH)
+    if not IsValid(cs) then return end
+
+    cs:SetNoDraw(false)
+    cs:SetModel(zombie_model)
+    cs:AddEffects(bit.bor(EF_BONEMERGE, EF_BONEMERGE_FASTCULL, EF_PARENT_ANIMATES))
+    cs:SetParent(ply)
+    cs:SetPos(ply:GetPos())
+    cs:SetAngles(ply:GetAngles())
+
+    applyHeadlessSetup(cs)
+
+    ply._ix_insanityNoDraw = true
+    ply:SetNoDraw(true)
+
+    local rec = { cs = cs }
+    PLUGIN._hallucinated[ply] = rec
+    return rec
+end
+
+local function removeHallucinationFor(ply)
+    local t = PLUGIN._hallucinated[ply]
+    if not t then return end
+    if IsValid(t.cs) then t.cs:Remove() end
+    PLUGIN._hallucinated[ply] = nil
+
+    if IsValid(ply) and ply._ix_insanityNoDraw then
+        ply:SetNoDraw(false)
+        ply._ix_insanityNoDraw = nil
+    end
+end
+
+local function canHallucinateTarget(ply, lp, sanity)
+    if not IsValid(ply) or ply == lp and only_other_players then return false end
+    if not ply:Alive() then return false end
+    if lp:GetPos():DistToSqr(ply:GetPos()) > max_range_sqr then return false end
+    if sanity > sanity_threshold then return false end
+    return true
+end
+
+function PLUGIN:Think()
+    local lp = LocalPlayer()
+    if not IsValid(lp) then return end
+    local char = lp:GetCharacter()
+    if not char then
+        for ply, _ in pairs(self._hallucinated) do removeHallucinationFor(ply) end
+        return
+    end
+
+    local sanity = char:GetSanity() or 100
+
+    -- make hallucinations if sanity is low
+    for _, ply in ipairs(player.GetAll()) do
+        if canHallucinateTarget(ply, lp, sanity) then
+            makeHallucinationFor(ply)
+        else
+            removeHallucinationFor(ply)
+        end
+    end
+
+    -- cleanup bad entries
+    for ply, t in pairs(self._hallucinated) do
+        if (not IsValid(ply)) or sanity > sanity_threshold then
+            removeHallucinationFor(ply)
+        end
+    end
+end
+
+hook.Add("ShutDown", "ixInsanityZombieHallucinationCleanup", function()
+    if not PLUGIN or not PLUGIN._hallucinated then return end
+    for ply, _ in pairs(PLUGIN._hallucinated) do removeHallucinationFor(ply) end
+end)
+
+hook.Add("OnEntityCreated", "ixInsanityZombieHallucinationSpawnFix", function(ent)
+    if ent:IsPlayer() and PLUGIN and PLUGIN._hallucinated and PLUGIN._hallucinated[ent] then
+        timer.Simple(0, function()
+            if PLUGIN._hallucinated[ent] then
+                removeHallucinationFor(ent)
+            end
+        end)
+    end
+end)
+
+hook.Add("PlayerDeath", "ixInsanityZombieHallucinationOnDeath", function(ply)
+    if ply == LocalPlayer() then
+        for other, _ in pairs(PLUGIN._hallucinated or {}) do removeHallucinationFor(other) end
+    end
+end)
