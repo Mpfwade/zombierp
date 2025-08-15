@@ -610,14 +610,27 @@ local function apply_headless(cs)
 end
 
 local function make_cs()
-    if not have_model() then return nil end
+    if not have_model() then 
+        print("[ZOMBIFY] Model not valid:", zombie_model)
+        return nil 
+    end
     
     local cs = ClientsideModel(zombie_model, RENDERGROUP_OPAQUE)
-    if not IsValid(cs) then return nil end
+    if not IsValid(cs) then 
+        print("[ZOMBIFY] Failed to create clientside model")
+        return nil 
+    end
     
-    cs:SetNoDraw(true) -- we draw manually
+    -- Don't set NoDraw initially - let's see if it renders at all first
+    cs:SetNoDraw(false)
+    
+    -- Apply zombie modifications
     apply_headless(cs)
     
+    -- Make it slightly red/dark to distinguish from normal players
+    cs:SetColor(Color(150, 100, 100, 255))
+    
+    print("[ZOMBIFY] Created zombie model successfully")
     return cs
 end
 
@@ -653,10 +666,12 @@ local function should_swap(p, lp, sanity)
     return true
 end
 
--- Hide the real player model
+-- Hide the real player model ONLY if we have a valid zombie model
 hook.Add("PrePlayerDraw","ix_insanity_hide_real_v4", function(p)
     local rec = hall[p]
     if rec and IsValid(rec.cs) then
+        -- Only hide if we successfully have a zombie model
+        print("[ZOMBIFY] Hiding real player:", p:Name())
         return true -- Hide the real player
     end
 end)
@@ -688,12 +703,16 @@ hook.Add("PostPlayerDraw","ix_insanity_draw_playerhook_v4", function(p)
         end
     end
     
-    -- Update animation and draw
+    -- Update animation
     cs:FrameAdvance(FrameTime())
     cs:SetupBones()
-    cs:DrawModel()
+    
+    -- Manual draw since we set NoDraw to false for testing
+    -- cs:DrawModel()
     
     rec.last_draw = drawn_frame
+    
+    print("[ZOMBIFY] Updated zombie for:", p:Name(), "at pos:", p:GetPos())
 end)
 
 -- Fallback drawing system
@@ -782,6 +801,29 @@ concommand.Add("test_zombify", function()
     for p, rec in pairs(hall) do
         if IsValid(p) and rec and IsValid(rec.cs) then
             print("Zombie active for:", p:Name())
+            print("  CS Model:", rec.cs:GetModel())
+            print("  CS Valid:", IsValid(rec.cs))
+            print("  CS NoDraw:", rec.cs:GetNoDraw())
+            print("  Player Pos:", p:GetPos())
+            print("  CS Pos:", rec.cs:GetPos())
         end
     end
+end)
+
+-- Force a specific player to become a zombie (for testing)
+concommand.Add("force_zombify", function(ply, cmd, args)
+    local target_name = args[1]
+    if not target_name then
+        print("Usage: force_zombify <player_name>")
+        return
+    end
+    
+    for _, p in ipairs(player.GetAll()) do
+        if string.find(string.lower(p:Name()), string.lower(target_name)) then
+            add_zombie(p)
+            print("Forced zombify on:", p:Name())
+            return
+        end
+    end
+    print("Player not found:", target_name)
 end)
