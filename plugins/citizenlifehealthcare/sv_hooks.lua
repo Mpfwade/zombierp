@@ -194,10 +194,9 @@ function PLUGIN:OnCharacterCreated(client, char) --- HUNGER SYSTEM
         player.ixSickTick = CurTime() + ix.config.Get("sickTime", 120)
         if client:IsCombine() or client:Team() == FACTION_VORTIGAUNT then
             char:SetData("sickness", 0)
-            char:SetData("sicknessType", "none")
+            char:SetData("sickness", 0)
         else
             char:SetData("sickness", char:GetData("sickness", 0)) -- Set default values for non-Combine factions
-            char:SetData("sicknessType", char:GetData("sicknessType", "none"))
         end
     end
 end
@@ -206,60 +205,26 @@ local coughSounds = {"ambient/voices/cough1.wav", "ambient/voices/cough2.wav", "
 local coughRadius = 200 -- Define the radius within which coughs affect other players
 util.AddNetworkString("TriggerPukeEffect")
 function PLUGIN:HandleSicknessEffects(ply, char)
-    if char:GetData("sickness_immunity") then
-        return -- Skip processing if the player is immune
-    end
-
+    if char:GetData("sickness_immunity") then return end
     if ply:GetMoveType() == MOVETYPE_NOCLIP then return end
     if ply.ixSickTick and ply.ixSickTick > CurTime() then return end
-    if not ply:Team() == FACTION_CITIZEN then
-        char:SetData("sicknessType", "none")
-        char:SetData("sickness", 0)
-        return
-    end
-
-    local sicknessType = char:GetData("sicknessType", "none")
-    local hungerLevel = char:GetHunger()
-    local currentWarmth = char:GetWarmth()
     local sicknessLevel = char:GetData("sickness", 0)
-    local weakness = char:GetData("weakness", 0)
-    if weakness < 25 then
-        return -- Not weak enough to fall sick
-    end
-
-    if hungerLevel <= 45 and weakness >= 25 and sicknessType == "none" then -- Update sickness type based on hunger level
-        char:SetData("sicknessType", "starvation")
-        sicknessType = "starvation"
-    elseif hungerLevel > 85 and sicknessType == "starvation" then
-        char:SetData("sicknessType", "none")
-        sicknessType = "none"
-        if sicknessLevel > 0 then
-            sicknessLevel = math.max(0, sicknessLevel - 1)
-            char:SetData("sickness", sicknessLevel)
-        end
-    end
-
-    if sicknessType == "starvation" then -- Handle sickness based on type
-        if hungerLevel <= 64 and (not ply.nextSicknessIncrease or ply.nextSicknessIncrease <= CurTime()) then
-            sicknessLevel = math.Clamp(sicknessLevel + 1, 0, 100)
-            ply.nextSicknessIncrease = CurTime() + ix.config.Get("sickTime", 60)
-        end
-
-        if sicknessLevel > 14 then self:HandleCoughing(ply, sicknessLevel) end
-        if sicknessLevel > 49 then self:HandleVomiting(ply, sicknessLevel) end
-    elseif sicknessType == "hypothermia" then
-        if currentWarmth <= 50 and (not ply.nextSicknessIncrease or ply.nextSicknessIncrease <= CurTime()) then
-            sicknessLevel = math.Clamp(sicknessLevel + 1, 0, 100)
-            ply.nextSicknessIncrease = CurTime() + 2
-        elseif currentWarmth > 50 then
-            sicknessLevel = math.Clamp(sicknessLevel - 1, 0, 100)
-        end
-    elseif sicknessType == "none" then
-        if sicknessLevel > 0 then sicknessLevel = math.Clamp(sicknessLevel - 0.5, 0, 100) end
+    local shouldGetSick = char:GetWarmth() < 40 or ply:GetNWBool("recentDeathNearby", false) -- Trigger sickness if exposed to bad conditions
+    if shouldGetSick then
+        sicknessLevel = math.Clamp(sicknessLevel + 1, 0, 100)
+    elseif sicknessLevel > 0 then
+        sicknessLevel = math.Clamp(sicknessLevel - 1, 0, 100)
     end
 
     char:SetData("sickness", sicknessLevel)
-    ply.ixSickTick = CurTime() + ix.config.Get("sickTime", 120)
+    if sicknessLevel > 15 then self:HandleCoughing(ply, sicknessLevel) end
+    if sicknessLevel > 50 then self:HandleVomiting(ply, sicknessLevel) end
+    if sicknessLevel >= 65 and ply.ConsumeStamina then
+        local drain = math.Clamp((sicknessLevel - 60) * 0.1, 0, 2) -- 0 to 2 stamina per tick
+        ply:ConsumeStamina(drain)
+    end
+
+    ply.ixSickTick = CurTime() + ix.config.Get("sickTime", 60)
 end
 
 function PLUGIN:HandleCoughing(ply, sicknessLevel)
@@ -269,6 +234,7 @@ function PLUGIN:HandleCoughing(ply, sicknessLevel)
             local coughSound = coughSounds[math.random(#coughSounds)]
             ply:EmitSound(coughSound)
             self:SpreadSickness(ply, 200) -- Spread the sickness when coughing -- Assuming 200 is the radius in which the sickness can spread
+            ply:ConsumeStamina(15)
         end
 
         timer.Create(coughTimerName, math.random(10, 20), 1, function() if IsValid(ply) then self:HandleCoughing(ply, sicknessLevel) end end)
@@ -293,11 +259,13 @@ function PLUGIN:HandleVomiting(ply, sicknessLevel)
                 ply:EmitSound("citizensounds/puking.wav")
                 ix.chat.Send(ply, "me", "violently projectile vomits.")
                 TriggerClientScreenShake(ply, 7, 7, 500, Vector(0, 7, 0))
+                ply:ConsumeStamina(90)
             else
                 ply:EmitSound("citizensounds/puking.wav")
                 ix.chat.Send(ply, "me", "vomits.")
                 TriggerClientScreenShake(ply, 5, 5, 500, Vector(0, 5, 0))
                 if not ply:GetNWBool("IsActing") then ply:ForceSequence("d2_coast03_postbattle_idle02_entry", nil, 2, false) end
+                ply:ConsumeStamina(35) -- Vomiting costs 5 stamina
             end
 
             net.Start("TriggerPukeEffect")
@@ -321,13 +289,15 @@ end
 
 function PLUGIN:SpreadSickness(ply, radius)
     local char = ply:GetCharacter()
-    if not char or char:GetData("sicknessType") == "none" then return end
+    if not char or char:GetData("sickness", 0) < 20 then return end
     for _, otherPly in ipairs(player.GetAll()) do
         if otherPly ~= ply and otherPly:GetPos():Distance(ply:GetPos()) <= radius then
             local otherChar = otherPly:GetCharacter()
-            if otherChar and otherChar:GetData("sicknessType") == "none" then
-                otherChar:SetData("sicknessType", char:GetData("sicknessType"))
-                print("Sickness spread from " .. ply:Nick() .. " to " .. otherPly:Nick())
+            if otherChar then
+                local currentSickness = otherChar:GetData("sickness", 0)
+                local newSickness = math.Clamp(currentSickness + 1, 0, 100) -- Increase sickness level
+                otherChar:SetData("sickness", newSickness)
+                print("Sickness spread from " .. ply:Nick() .. " to " .. otherPly:Nick() .. " | New sickness: " .. newSickness)
             end
         end
     end
@@ -354,8 +324,6 @@ function PLUGIN:UpdateHunger(ply, char, hungerLevel)
     if hungerLevel > 0 then
         local newHunger = math.Clamp(hungerLevel - 1, 0, 100)
         char:SetHunger(newHunger)
-    elseif hungerLevel <= 50 then
-        char:SetData("sicknessType", "starvation")
     end
 
     ply.ixHungerTick = CurTime() + ix.config.Get("hungerTime", 120)
@@ -379,7 +347,7 @@ hook.Add("PlayerDeath", "HungerSystem", function(ply, inf, attacker)
     char:SetData("sickness", 0)
     char:SetData("weakness", 0)
     ply:RemoveDrunkEffect()
-    char:SetData("sicknessType", "none")
+    char:SetData("sickness", 0)
     char:SetData("sickness_immunity", nil)
 end)
 
@@ -514,49 +482,110 @@ end)
 
 function PLUGIN:UpdateWeakness(ply, char)
     if ply.ixWeakTick and ply.ixWeakTick > CurTime() then return end
+
     local hunger = char:GetHunger()
     local weakness = char:GetData("weakness", 0)
+    local sickness = char:GetData("sickness", 0)
+
+    -- Increase weakness based on hunger
     if hunger < 20 then
-        weakness = math.min(weakness + 3, 100) -- Increment weakness if under threshold
+        weakness = math.min(weakness + 3, 100)
     elseif hunger < 40 then
-        weakness = math.min(weakness + 1, 100) -- Increment weakness if under threshold
+        weakness = math.min(weakness + 1, 100)
     elseif hunger > 65 then
-        weakness = math.max(0, weakness - 2) -- Faster recovery if well-fed
+        weakness = math.max(0, weakness - 2)
     end
 
+    -- Apply weakness
     char:SetData("weakness", weakness)
-    if weakness < 35 then -- If weakness is below 35, sickness starts to go away
-        local sicknessLevel = char:GetData("sickness", 0)
-        if sicknessLevel > 0 then char:SetData("sickness", math.max(0, sicknessLevel - 10)) end
+
+    -- Recover from sickness if weakness is low
+    if weakness < 35 and sickness > 0 then
+        char:SetData("sickness", math.max(0, sickness - 10))
     end
 
-    if weakness > 45 then -- Check if the player should become sick based on weakness
-        local sicknessType = char:GetData("sicknessType", "none")
-        if sicknessType == "none" then
-            local increaseChance = weakness - 25 -- Increase chances as weakness grows
-            if math.random(100) < increaseChance then char:SetData("sicknessType", "starvation") end
+    -- Chance to become sick if weakness is high
+    if weakness > 45 and sickness <= 0 then
+        local chance = weakness - 25
+        if math.random(100) < chance then
+            char:SetData("sickness", 1)
         end
     end
 
-    if char:GetData("sicknessType") == "starvation" then -- Only increase sickness level if the sickness type is "starvation"
-        local currentSickness = char:GetData("sickness", 0)
-        char:SetData("sickness", math.min(currentSickness + 1, 100))
+    -- Progress sickness if already sick
+    if sickness > 0 then
+        char:SetData("sickness", math.min(sickness + 1, 100))
     end
 
-    local scale = 1 - (weakness / 750) -- Scale player model bones based on weakness, excluding the head bone -- Example: scale down to a minimum of 0.5 size
+    -- Stamina drain based on weakness (progressive)
+    if ply.ConsumeStamina and ply:Alive() then
+        local drain = math.Clamp(weakness * 0.02, 0, 3) -- Max 3 stamina drained per 10s
+        if drain > 0 then
+            ply:ConsumeStamina(drain)
+        end
+    end
+
+    -- Scale bones
+    local scale = 1 - (weakness / 750)
     local bones = ply:GetBoneCount() or 0
     for i = 0, bones - 1 do
         local boneName = ply:GetBoneName(i)
-        if boneName and boneName ~= "ValveBiped.Bip01_Head" then -- Skip scaling for the head bone
+        if boneName and boneName ~= "ValveBiped.Bip01_Head" then
             ply:ManipulateBoneScale(i, Vector(scale, scale, scale))
         else
-            ply:ManipulateBoneScale(i, Vector(1, 1, 1)) -- Reset head bone to default scale to ensure no unintended scaling
+            ply:ManipulateBoneScale(i, Vector(1, 1, 1))
         end
     end
 
-    if ply:GetNWBool("IsActing") then -- More effective recovery when resting
+    -- Resting reduces weakness faster
+    if ply:GetNWBool("IsActing") then
         char:SetData("weakness", math.max(0, weakness - 5))
     end
 
     ply.ixWeakTick = CurTime() + 10
 end
+
+local meleeStaminaDrain = {
+    ["tfa_nmrih_bat"] = 5,      -- was 10
+    ["tfa_nmrih_bcd"] = 4,      -- was 8
+    ["tfa_nmrih_cleaver"] = 3,  -- was 6
+    ["tfa_nmrih_crowbar"] = 4,  -- was 8
+    ["tfa_nmrih_etool"] = 4.5,  -- was 9
+    ["tfa_nmrih_fireaxe"] = 6,  -- was 12
+    ["tfa_nmrih_fubar"] = 6.5,  -- was 13
+    ["tfa_nmrih_hatchet"] = 3.5,-- was 7
+    ["tfa_nmrih_kknife"] = 2,   -- was 4
+    ["tfa_nmrih_lpipe"] = 5,    -- was 10
+    ["tfa_nmrih_machete"] = 4.5,-- was 9
+    ["tfa_nmrih_pickaxe"] = 6,  -- was 12
+    ["tfa_nmrih_sledge"] = 7.5, -- was 15
+    ["tfa_nmrih_spade"] = 4,    -- was 8
+    ["tfa_nmrih_wrench"] = 3.5, -- was 7
+}
+
+hook.Add("KeyPress", "StaminaDrainMeleeAttack", function(ply, key)
+    if not IsValid(ply) or not ply:Alive() then return end
+    if key ~= IN_ATTACK then return end
+
+    local weapon = ply:GetActiveWeapon()
+    if not IsValid(weapon) then return end
+
+    local class = weapon:GetClass()
+    local drain = meleeStaminaDrain[class]
+    if not drain then return end
+
+    -- Check if stamina is at least 20 before swinging
+    if ply.GetStamina and ply:GetStamina() < 20 then
+        -- Optionally, notify the player here
+        return
+    end
+
+    -- Prevent spamming by adding cooldown
+    if ply.lastMeleeDrain and ply.lastMeleeDrain > CurTime() then return end
+    ply.lastMeleeDrain = CurTime() + 0.6 -- Adjust depending on weapon swing speed
+
+    if ply.ConsumeStamina then
+        ply:ConsumeStamina(drain)
+    end
+end)
+

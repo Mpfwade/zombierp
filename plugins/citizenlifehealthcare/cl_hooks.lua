@@ -311,7 +311,7 @@ function PLUGIN:PostDrawOpaqueRenderables()
     local character = client:GetCharacter()
     if not character then return end
     local sanity = character:GetSanity() / 100
-    if sanity >= 20 then self.nextMonster = CurTime() + 120 end
+    if sanity <= 20 then self.nextMonster = CurTime() + 120 end
     if self.nextMonster < CurTime() then
         self.monsters[#self.monsters + 1] = {"models/Humans/Group01/Male_01.mdl", CurTime() + 24}
         self.nextMonster = CurTime() + 300
