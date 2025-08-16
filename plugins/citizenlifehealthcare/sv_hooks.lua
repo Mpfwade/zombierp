@@ -377,30 +377,50 @@ end
 
 util.AddNetworkString("PlayClientSound")
 util.AddNetworkString("StopClientSound")
-local stressImpactFactor = 0.3 -- The impact factor determines how much stress affects sanity decay
+local stressImpactFactor = 0.2 -- The impact factor determines how much stress affects sanity decay
 function PLUGIN:UpdateSanity(ply)
     if ply.ixSanityTick and ply.ixSanityTick > CurTime() then return end
+
     local char = ply:GetCharacter()
     if not char then return end
+
     local currentSanity = char:GetSanity()
-    local decayRate = ix.config.Get("sanityDecayRate", 0.5) + (char:GetData("stress", 0) * stressImpactFactor)
-    if ply:GetNWBool("InStressZone") then decayRate = decayRate + ix.config.Get("sanityZoneDecayRate", 1.0) end
-    local pos = ply:GetPos() -- Check for nearby positive entities or events
+    local stress = char:GetData("stress", 0)
+    local decayRate = ix.config.Get("sanityDecayRate", 0.5) + (stress * stressImpactFactor)
+
+    if ply:GetNWBool("InStressZone") then
+        decayRate = decayRate + ix.config.Get("sanityZoneDecayRate", 1.0)
+    end
+
+    -- Nearby influences
+    local pos = ply:GetPos()
     local entities = ents.FindInSphere(pos, 450)
     local isNearPositiveEntity = false
     local teamSanityBonus = 0
+
     for _, ent in ipairs(entities) do
         if ent:IsPlayer() and ent:Team() == ply:Team() and ent ~= ply then
-            teamSanityBonus = teamSanityBonus + 0.9 -- You might increase this to a higher value.
-            print("Sanity increased by nearby team member. Current bonus: " .. teamSanityBonus)
+            teamSanityBonus = teamSanityBonus + 0.9
         end
 
-        if (ent:GetClass() == "ix_tv" and ent.IsActivated) or (ent:GetClass() == "ww2_radio" and ent.On) then isNearPositiveEntity = true end
+        if (ent:GetClass() == "ix_tv" and ent.IsActivated) or (ent:GetClass() == "ww2_radio" and ent.On) then
+            isNearPositiveEntity = true
+        end
     end
 
-    if isNearPositiveEntity then currentSanity = math.min(100, currentSanity + ix.config.Get("sanityRecoveryRate", 0.3)) end
+    -- Boost sanity from positive environment
+    if isNearPositiveEntity then
+        currentSanity = math.min(100, currentSanity + ix.config.Get("sanityRecoveryRate", 0.3))
+    end
+
+    -- Boost sanity if stress is zero
+    if stress == 0 then
+        currentSanity = math.min(100, currentSanity + 0.5) -- Adjust gain rate here
+    end
+
     currentSanity = math.min(100, currentSanity + teamSanityBonus)
     currentSanity = math.max(0, currentSanity - decayRate)
+
     char:SetSanity(currentSanity)
     ply.ixSanityTick = CurTime() + ix.config.Get("sanityTime", 120)
 end
@@ -410,7 +430,7 @@ function PLUGIN:UpdateStress(ply)
     if not char then return end
     local stressLevel = char:GetData("stress", 0)
     local baseDecay = 1
-    local stressDecayRate = 0.5
+    local stressDecayRate = 0.3
     local updateInterval = 2
     local nearbyEntities = ents.FindInSphere(ply:GetPos(), 1000) -- Detect nearby VJ Base zombies once per update to share between increase and decay logic
     local zombieCount = 0

@@ -25,79 +25,6 @@ function PLUGIN:HUDPaint()
             surface.DrawTexturedRect(moodle.position, screenMargin, moodleSize, moodleSize)
         end
     end
-
-    if not IsValid(client) then client = LocalPlayer() end
-    local character = client:GetCharacter()
-    if not character then return end
-    local sanity = character:GetSanity() / 100
-
-    if sanity >= 100 and self.messages and #self.messages > 0 then
-    table.Empty(self.messages)
-end
-    self.nextMessage = self.nextMessage or 0
-self.messages = self.messages or {}
-
-if self.nextMessage < CurTime() then
-    local chance = math_random(90, 100)
-    local nextMessage = math_random(500, 600)
-
-    if sanity < 0.2 and chance > 40 then
-        for i = 1, math_random(2, 4) do
-            self.messages[#self.messages + 1] = {
-                table.Random(self.randomMessages),
-                CurTime() + math_random(12, 45)
-            }
-        end
-        nextMessage = math_random(20, 40)
-    elseif sanity < 0.4 and chance > 60 then
-        self.messages[#self.messages + 1] = {
-            table.Random(self.randomMessages),
-            CurTime() + math_random(12, 45)
-        }
-        nextMessage = math_random(150, 300)
-    elseif sanity < 0.6 and chance > 80 then
-        self.messages[#self.messages + 1] = {
-            table.Random(self.randomMessages),
-            CurTime() + math_random(12, 45)
-        }
-    end
-
-    self.nextMessage = CurTime() + nextMessage
-end
-
-    for i, v in ipairs(self.messages) do
-        if v[2] < CurTime() then table.remove(self.messages, i) end
-        if v.reverse == nil then
-            local rand = math_random(-5, 5)
-            if rand > 0 then
-                v.reverse = true
-            else
-                v.reverse = false
-            end
-        end
-
-        v.x = v.x or math_random(1, ScrW())
-        v.y = v.y or math_random(1, ScrH())
-        v.projX = v.projX or math_random(1, ScrW())
-        v.projY = v.projY or math_random(1, ScrH())
-        v.x = Lerp(0.005, v.x, v.projX)
-        v.y = Lerp(0.005, v.y, v.projY)
-        local dist = math.Distance(v.x, v.y, v.projX, v.projY)
-        if dist < 5 then
-            v.projX = math_random(1, ScrW())
-            v.projY = math_random(1, ScrH())
-        end
-
-        local m = Matrix()
-        local pos = Vector(v.x, v.y)
-        m:Translate(pos)
-        m:Scale(Vector(1, 1, 1) * TimedSin(0.25, 3, 6, v[2]))
-        m:Rotate(Angle(0, v[2] + CurTime() * 50 * (v.reverse and 1 or -1), 0))
-        m:Translate(-pos)
-        cam.PushModelMatrix(m)
-        draw.SimpleText(v[1], "BudgetLabel", v.x + math_random(-3, 3), v.y + math_random(-3, 3), Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        cam.PopModelMatrix()
-    end
 end
 
 hook.Add("HUDPaint", "MoodleHUDPaint", function() PLUGIN:HUDPaint() end)
@@ -123,23 +50,6 @@ function PLUGIN:RenderScreenspaceEffects()
     if character:GetData("Water", false) then
         DrawSharpen(5, 5)
     end
-
-    if sanity >= 15 then
-    DrawColorModify({
-        ["$pp_colour_addr"] = 0.1,  -- Red additive
-        ["$pp_colour_addg"] = 0,
-        ["$pp_colour_addb"] = 0,
-        ["$pp_colour_brightness"] = -0.05,
-        ["$pp_colour_contrast"] = 1.2,
-        ["$pp_colour_colour"] = 0.5,
-        ["$pp_colour_mulr"] = 0.2,
-        ["$pp_colour_mulg"] = 0,
-        ["$pp_colour_mulb"] = 0
-    })
-
-    surface.SetDrawColor(255, 0, 0, 40) -- Light red screen overlay
-    surface.DrawRect(0, 0, ScrW(), ScrH())
-end
 
     -- Blur for sickness
     local blurStrength = 0
@@ -218,150 +128,6 @@ end
     end
 
     DrawColorModify(colMod)
-end
-
-PLUGIN.randomMessages = {"Damn the world is so meh...", "The world sucks so much, why can't it just be better...?", "I wonder if things will get better...", "How much longer do I have to live like this..."}
-PLUGIN.events = {
-    [1] = function(client)
-        surface.PlaySound("ambient/voices/squeal1.wav")
-        client:ChatNotify("What was that sound...?")
-    end,
-    [2] = function(client)
-        local sound = CreateSound(client, "music/radio1.mp3")
-        sound:SetDSP(5)
-        sound:Play()
-        timer.Simple(20, function() sound:FadeOut(3) end)
-        client:ChatNotify("Why... why can I hear music...?")
-    end,
-    [3] = function(client)
-        surface.PlaySound("ambient/voices/playground_memory.wav")
-        client:ChatNotify("What are those sounds...? Children...?")
-    end,
-    [4] = function(client)
-        local sound = CreateSound(client, "player/heartbeat1.wav")
-        sound:SetDSP(5)
-        sound:Play()
-        timer.Simple(6, function() sound:FadeOut(3) end)
-    end,
-    [5] = function(client)
-        local sound = CreateSound(client, "citizensounds/insanity_outside.mp3")
-        sound:SetDSP(5)
-        sound:Play()
-        timer.Simple(12, function() sound:FadeOut(120) end)
-        client:ChatNotify("What is that noise...?")
-    end,
-    [6] = function(client)
-        local sound = CreateSound(client, "npc/stalker/breathing3.wav")
-        sound:SetDSP(5)
-        sound:Play()
-        timer.Simple(5, function() sound:FadeOut(3) end)
-        client:ChatNotify("Who is breathing...?")
-    end,
-    [7] = function(client)
-        local sound = CreateSound(client, "buttons/combine_button_locked.wav")
-        sound:SetDSP(38)
-        sound:Play()
-        sound:FadeOut(3)
-        ErrorNoHalt("Get trolled noob :^)\n")
-        system.FlashWindow()
-    end,
-    [8] = function(client)
-        local sound = CreateSound(client, "vo/episode_1/intro/vortchorus.wav")
-        sound:SetDSP(38)
-        sound:Play()
-        client:ScreenFade(SCREENFADE.OUT, Color(255, 0, 0, 220), 2, 12)
-        timer.Simple(9, function()
-            sound:FadeOut(7)
-            timer.Simple(4, function() client:ScreenFade(SCREENFADE.IN, Color(255, 0, 0, 220), 2, 2) end)
-        end)
-    end
-}
-
-function PLUGIN:Think()
-    if not IsValid(client) then client = LocalPlayer() end
-    local character = client:GetCharacter()
-    if not character then return end
-    local sanity = character:GetSanity() / 100
-    if sanity < 60 then
-        self.nextEvent = CurTime() + 120
-        return
-    end
-
-    self.nextEvent = self.nextEvent or CurTime() + math_random(300, 600)
-    if self.nextEvent < CurTime() then
-        local rand = math_random(1, #self.events)
-        if self.events[rand] then self.events[rand](client) end
-        self.nextEvent = CurTime() + math_random(300, 1800)
-    end
-end
-
-PLUGIN.dist = 64 ^ 2
-local function GetPos(client)
-    local tr = {}
-    tr.start = client:GetPos()
-    tr.endpos = client:GetPos() + Angle(0, EyeAngles().y, 0):Forward() * -224
-    tr.filter = client
-    return util.TraceLine(tr).HitPos
-end
-
-function PLUGIN:PostDrawOpaqueRenderables()
-    self.monsters = self.monsters or {}
-    self.nextMonster = self.nextMonster or 0
-    if not IsValid(client) then client = LocalPlayer() end
-    local character = client:GetCharacter()
-    if not character then return end
-    local sanity = character:GetSanity() / 100
-    if sanity <= 20 then self.nextMonster = CurTime() + 120 end
-    if self.nextMonster < CurTime() then
-        self.monsters[#self.monsters + 1] = {"models/Humans/Group01/Male_01.mdl", CurTime() + 24}
-        self.nextMonster = CurTime() + 300
-        client:ChatNotify("You feel as if something is watching you...")
-    end
-
-    for i, v in ipairs(self.monsters) do
-        if v[2] < CurTime() then
-            if IsValid(v.ent) then v.ent:Remove() end
-            table.remove(self.monsters, i)
-        end
-
-        v.ent = v.ent or ClientsideModel(v[1], RENDERGROUP_BOTH)
-        if v.ent then
-            v.pos = v.pos or GetPos(client)
-            if not v.pos then continue end
-            local trace = {}
-            trace.start = EyePos()
-            trace.endpos = EyePos() + EyeAngles():Forward() * EyePos():Distance(v.pos)
-            trace.filter = client
-            trace = util.TraceLine(trace)
-            if trace.HitPos:Distance(v.pos) < 72 then
-                v.startLook = v.startLook or CurTime() + 1.5
-                if v.startLook < CurTime() then v.pos = LerpVector(0.09, v.pos, LocalPlayer():GetPos()) end
-            end
-
-            if client:GetPos():DistToSqr(v.pos) < self.dist then
-                v.ent:Remove()
-                table.remove(self.monsters, i)
-                client:SetDSP(39)
-                surface.PlaySound("npc/stalker/go_alert2a.wav")
-                client:ScreenFade(SCREENFADE.MODULATE, Color(0, 0, 0), 1, 0)
-                timer.Simple(1, function()
-                    client:SetDSP(38) -- Could improve this but I'm lazy
-                    client:ScreenFade(SCREENFADE.PURGE, Color(0, 0, 0, 240), 4, 0)
-                    timer.Simple(4, function()
-                        client:SetDSP(39)
-                        client:ScreenFade(SCREENFADE.MODULATE, Color(0, 0, 0), 1, 0)
-                        timer.Simple(1, function() client:SetDSP(0) end)
-                    end)
-                end)
-            end
-
-            v.ang = Angle(0, EyeAngles().y - 180, 0)
-            v.ent:SetPos(v.pos)
-            v.ent:SetAngles(v.ang)
-            v.ent:SetSequence(ACT_IDLE)
-            v.ent:SetColor(Color(0, 0, 0))
-        end
-    end
 end
 
 function PLUGIN:GetWarmthText(amount)
@@ -560,101 +326,99 @@ hook.Add("PlayerDeath", "StopSoundOnDeath", function(ply)
 end)
 
 
--- insanity zombify v4 FIXED
-local zombie_model = "models/Humans/Group01/Male_Cheaple.mdl"
-local sanity_threshold = 40
-local max_range_sqr = 900*900
-local only_others = true
-local zombie_skin = 0
-local bodygroup_hints = {"head","sever","decap"}
+-- Enhanced Helix Sanity System with Begotten-style Visual Effects
+-- Bonemerged clones with proper animations; parent player is hard-hidden to prevent overlap
 
-local hall = hall or {} -- ply -> { cs=Clientsidemodel, last_draw=0 }
-local drawn_frame = 0 -- frame counter
+------------------------------------------------------------
+-- Tuning
+------------------------------------------------------------
+local sanity_threshold   = 40
+local max_range_sqr      = 900 * 900
+local only_others        = true
 
-hook.Add("Think","ix_insanity_framecount",function()
-    drawn_frame = drawn_frame + 1
-end)
+local SANITY_VERY_LOW    = 20
+local SANITY_LOW         = 40
+local SANITY_MEDIUM      = 50
 
-local function have_model()
-    return util.IsValidModel(zombie_model)
+-- Debug toggle: 0 = off, 1 = on
+CreateClientConVar("ix_sanity_debug", "0", true, false, "Enable debug prints for sanity system")
+
+------------------------------------------------------------
+-- State
+------------------------------------------------------------
+local hall               = hall or {}               -- [ply] = { cs=ClientsideModel }
+local insanitySkeletons  = insanitySkeletons or {}  -- [entindex] = skeleton CS entity
+local nextSanitySound    = 0
+local frameTime          = 0
+local contrastAdd        = 0
+
+local medSanitySounds = {
+    "physics/wood/wood_strain2.wav",
+    "physics/wood/wood_strain3.wav",
+    "physics/wood/wood_strain4.wav",
+    "physics/wood/wood_strain5.wav"
+}
+
+local lowSanitySounds = {
+    "ambient/wind/wind_snippet1.wav",
+    "ambient/wind/wind_snippet2.wav",
+    "ambient/wind/wind_snippet3.wav"
+}
+
+
+-- sprite for eye glow
+local matEyeGlow = Material("sprites/light_ignorez")
+
+------------------------------------------------------------
+-- Utils
+------------------------------------------------------------
+local function dprint(...)
+    if GetConVar("ix_sanity_debug"):GetBool() then
+        print("[SANITY]", ...)
+    end
+end
+
+local function GetPlayerSanity()
+    local lp = LocalPlayer()
+    if not IsValid(lp) then return 100 end
+    local character = lp.GetCharacter and lp:GetCharacter()
+    if not character or not character.GetSanity then return 100 end
+    local s = character:GetSanity()
+    if s == nil then return 100 end
+    return s
 end
 
 local function apply_headless(cs)
     if not IsValid(cs) then return end
-    
-    cs:SetSkin(zombie_skin or 0)
-    
-    local n = cs:GetNumBodyGroups() or 0
-    local set_any = false
-    
-    for i = 0, n - 1 do
-        local name = string.lower(cs:GetBodygroupName(i) or "")
-        for _,h in ipairs(bodygroup_hints) do
-            if name:find(h, 1, true) then
-                local cnt = cs:GetBodygroupCount(i) or 0
-                if cnt > 1 then
-                    cs:SetBodygroup(i, cnt - 1)
-                    set_any = true
-                end
-                break
-            end
-        end
-    end
-    
-    if not set_any then
-        local b = cs:LookupBone("ValveBiped.Bip01_Head1") or cs:LookupBone("head") or cs:LookupBone("Head")
-        if b then
-            cs:ManipulateBoneScale(b, Vector(0,0,0))
-        end
+    local b = cs:LookupBone("ValveBiped.Bip01_Head1") or cs:LookupBone("head") or cs:LookupBone("Head")
+    if b then
+        cs:ManipulateBoneScale(b, Vector(0, 0, 0))
     end
 end
 
-local function make_cs()
-    if not have_model() then 
-        print("[ZOMBIFY] Model not valid:", zombie_model)
-        return nil 
+local function make_cs(p)
+    if not IsValid(p) then return nil end
+
+    local model_path = p:GetModel()
+    if not util.IsValidModel(model_path) then
+        dprint("Model not valid:", model_path)
+        return nil
     end
-    
-    local cs = ClientsideModel(zombie_model, RENDERGROUP_OPAQUE)
-    if not IsValid(cs) then 
-        print("[ZOMBIFY] Failed to create clientside model")
-        return nil 
+
+    local cs = ClientsideModel(model_path, RENDERGROUP_OPAQUE)
+    if not IsValid(cs) then
+        dprint("Failed to create clientside model for:", p:Name())
+        return nil
     end
-    
-    -- Don't set NoDraw initially - let's see if it renders at all first
+
     cs:SetNoDraw(false)
-    
-    -- Apply zombie modifications
+    -- Zombie stylization
     apply_headless(cs)
-    
-    -- Make it slightly red/dark to distinguish from normal players
-    cs:SetColor(Color(150, 100, 100, 255))
-    
-    print("[ZOMBIFY] Created zombie model successfully")
+    cs:SetMaterial("models/flesh")               -- swap to your material if desired
+    cs:SetColor(Color(100, 0, 0, 200))           -- reddish/transparent
+
+    dprint("Created zombie model for:", p:Name())
     return cs
-end
-
-local function add_zombie(p)
-    local rec = hall[p]
-    if rec and IsValid(rec.cs) then return end
-    
-    local cs = make_cs()
-    if not IsValid(cs) then return end
-    
-    hall[p] = {
-        cs = cs,
-        last_draw = 0
-    }
-end
-
-local function remove_zombie(p)
-    local rec = hall[p]
-    if not rec then return end
-    
-    if IsValid(rec.cs) then
-        rec.cs:Remove()
-    end
-    hall[p] = nil
 end
 
 local function should_swap(p, lp, sanity)
@@ -666,164 +430,441 @@ local function should_swap(p, lp, sanity)
     return true
 end
 
--- Hide the real player model ONLY if we have a valid zombie model
-hook.Add("PrePlayerDraw","ix_insanity_hide_real_v4", function(p)
+------------------------------------------------------------
+-- Parent hide/show (hard, overlap-proof)
+------------------------------------------------------------
+local function hide_parent_player(p)
+    if not IsValid(p) then return end
+    if p._ixInsanityHidden then return end
+    p._ixInsanityHidden = true
+    p._ixInsanityOldMat = p:GetMaterial()
+    p._ixInsanityOldRM  = p:GetRenderMode()
+
+    -- make parent invisible but still "drawn" so bonemerged child renders
+    p:SetRenderMode(RENDERMODE_NORMAL)
+    p:SetMaterial("engine/occlusionproxy")
+end
+
+local function restore_parent_player(p)
+    if not IsValid(p) then return end
+    if not p._ixInsanityHidden then return end
+
+    p:SetMaterial(p._ixInsanityOldMat or "")
+    p:SetRenderMode(p._ixInsanityOldRM or RENDERMODE_NORMAL)
+
+    p._ixInsanityHidden = nil
+    p._ixInsanityOldMat = nil
+    p._ixInsanityOldRM  = nil
+end
+
+------------------------------------------------------------
+-- Add/remove zombie (BONEMERGED so animations follow Helix)
+------------------------------------------------------------
+local function add_zombie(p)
+    if not IsValid(p) then return end
     local rec = hall[p]
     if rec and IsValid(rec.cs) then
-        -- Only hide if we successfully have a zombie model
-        print("[ZOMBIFY] Hiding real player:", p:Name())
-        return true -- Hide the real player
+        hide_parent_player(p) -- ensure hidden if something restored it
+        return
     end
-end)
 
--- Draw zombie model during player render
-hook.Add("PostPlayerDraw","ix_insanity_draw_playerhook_v4", function(p)
+    local cs = make_cs(p)
+    if not IsValid(cs) then return end
+
+    -- Let the engine/Helix drive animations through the parent
+    cs:SetParent(p)
+    cs:AddEffects(EF_BONEMERGE)
+    cs:AddEffects(EF_BONEMERGE_FASTCULL)
+    cs:SetNoDraw(false)
+
+    -- Mirror skin/bodygroups so clothing/state from Helix lines up
+    cs:SetSkin(p:GetSkin() or 0)
+    local bgs = p.GetBodyGroups and p:GetBodyGroups() or {}
+    for _, bg in ipairs(bgs) do
+        cs:SetBodygroup(bg.id, p:GetBodygroup(bg.id))
+    end
+
+    hall[p] = { cs = cs }
+
+    -- hide the real player to prevent overlap; child will render
+    hide_parent_player(p)
+end
+
+local function remove_zombie(p)
     local rec = hall[p]
-    if not rec or not IsValid(rec.cs) then return end
-    
-    local cs = rec.cs
-    
-    -- Copy player position and rotation
-    cs:SetPos(p:GetPos())
-    cs:SetAngles(Angle(0, p:EyeAngles().y, 0))
-    
-    -- Copy animation data
-    local seq = p:GetSequence()
-    if seq and seq >= 0 then
-        cs:SetSequence(seq)
-        cs:SetCycle(p:GetCycle())
-        cs:SetPlaybackRate(p:GetPlaybackRate())
-    end
-    
-    -- Copy pose parameters
-    for i = 0, p:GetNumPoseParameters()-1 do
-        local name = p:GetPoseParameterName(i)
-        if name then
-            cs:SetPoseParameter(name, p:GetPoseParameter(i))
-        end
-    end
-    
-    -- Update animation
-    cs:FrameAdvance(FrameTime())
-    cs:SetupBones()
-    
-    -- Manual draw since we set NoDraw to false for testing
-    -- cs:DrawModel()
-    
-    rec.last_draw = drawn_frame
-    
-    print("[ZOMBIFY] Updated zombie for:", p:Name(), "at pos:", p:GetPos())
-end)
-
--- Fallback drawing system
-hook.Add("PostDrawOpaqueRenderables","ix_insanity_fallbackdraw_v4", function()
-    for p, rec in pairs(hall) do
-        if not IsValid(p) or not rec or not IsValid(rec.cs) then
-            goto cont
-        end
-        
-        -- Skip if already drawn this frame
-        if rec.last_draw == drawn_frame then
-            goto cont
-        end
-        
-        local cs = rec.cs
-        
-        -- Update position and basic animation
-        cs:SetPos(p:GetPos())
-        cs:SetAngles(Angle(0, p:EyeAngles().y, 0))
-        
-        -- Keep animation alive
-        cs:FrameAdvance(FrameTime())
-        cs:SetupBones()
-        cs:DrawModel()
-        
-        rec.last_draw = drawn_frame
-        
-        ::cont::
-    end
-end)
-
--- Main logic timer
-timer.Create("ix_insanity_zombify_v4", 0.3, 0, function()
-    local lp = LocalPlayer()
-    if not IsValid(lp) then return end
-    
-    local ch = lp:GetCharacter()
-    if not ch then
-        -- Clean up if no character
-        for p,_ in pairs(hall) do
-            remove_zombie(p)
+    if not rec then
+        -- still ensure parent is visible if no skeleton effect is active
+        if not insanitySkeletons[p:EntIndex()] then
+            restore_parent_player(p)
         end
         return
     end
-    
-    local sanity = ch:GetSanity() or 100
-    
-    -- Check all players
-    for _,p in ipairs(player.GetAll()) do
+
+    if IsValid(rec.cs) then rec.cs:Remove() end
+    hall[p] = nil
+
+    -- restore parent unless skeleton overlay is still active (which may fade alpha)
+    if not insanitySkeletons[p:EntIndex()] then
+        restore_parent_player(p)
+    end
+end
+
+------------------------------------------------------------
+-- Insanity skeletons (Begotten-style)
+------------------------------------------------------------
+local function CreateInsanitySkeleton(player)
+    if not IsValid(player) then return nil end
+    local idx = player:EntIndex()
+
+    if IsValid(insanitySkeletons[idx]) then
+        return insanitySkeletons[idx]
+    end
+
+    local skeletonEnt = ClientsideModel("models/skeleton/skeleton_whole.mdl", RENDERGROUP_OPAQUE)
+    if not IsValid(skeletonEnt) then
+        skeletonEnt = ClientsideModel("models/player/skeleton.mdl", RENDERGROUP_OPAQUE)
+    end
+    if not IsValid(skeletonEnt) then
+        dprint("Could not create skeleton model for", player:Name())
+        return nil
+    end
+
+    skeletonEnt:SetParent(player)
+    skeletonEnt:SetRenderMode(RENDERMODE_TRANSALPHA)
+    skeletonEnt:SetColor(Color(255, 255, 255, 0))
+    skeletonEnt:AddEffects(EF_BONEMERGE)
+
+    -- Ensure parent is hidden while skeleton fades in (also good with our hard hide)
+    hide_parent_player(player)
+
+    -- Also fade the parent alpha down (visual belt-and-suspenders)
+    player:SetRenderMode(RENDERMODE_TRANSALPHA)
+    player:SetColor(Color(255, 255, 255, 255))
+
+    local reps = 0
+    local tname = tostring(idx) .. "_skeletonDecay"
+    timer.Create(tname, 0.01, 255, function()
+        if not (IsValid(skeletonEnt) and IsValid(player)) then return end
+        reps = reps + 1
+        local aPlayer   = math.max(0, 255 - reps)
+        local aSkeleton = math.min(255, reps)
+
+        player:SetColor(Color(255, 255, 255, aPlayer))
+        skeletonEnt:SetColor(Color(255, 255, 255, aSkeleton))
+    end)
+
+    insanitySkeletons[idx] = skeletonEnt
+    return skeletonEnt
+end
+
+local function RemoveInsanitySkeleton(player)
+    if not IsValid(player) then return end
+    local idx = player:EntIndex()
+    local skeleton = insanitySkeletons[idx]
+
+    if IsValid(skeleton) then
+        skeleton:Remove()
+    end
+    insanitySkeletons[idx] = nil
+
+    -- restore parent material/alpha if no zombie clone remains
+    if not (hall[player] and hall[player].cs and IsValid(hall[player].cs)) then
+        restore_parent_player(player)
+    end
+
+    timer.Remove(tostring(idx) .. "_skeletonDecay")
+    player:SetRenderMode(RENDERMODE_TRANSALPHA)
+    player:SetColor(Color(255, 255, 255, 255))
+end
+
+------------------------------------------------------------
+-- Frame & timing
+------------------------------------------------------------
+hook.Add("Think", "ix_insanity_framecount", function()
+    frameTime = FrameTime()
+end)
+
+------------------------------------------------------------
+-- Screenspace (color) effects
+------------------------------------------------------------
+hook.Add("RenderScreenspaceEffects", "ix_sanity_visual_effects", function()
+    local sanity = GetPlayerSanity()
+
+    if sanity <= SANITY_MEDIUM then
+        contrastAdd = contrastAdd or 0
+
+        local cm = {}
+        cm["$pp_colour_addr"] = 0
+        cm["$pp_colour_addg"] = 0 - contrastAdd
+        cm["$pp_colour_addb"] = 0 - contrastAdd
+        cm["$pp_colour_brightness"] = 0 + (contrastAdd * 0.1)
+        cm["$pp_colour_contrast"]   = 1 + contrastAdd
+        cm["$pp_colour_colour"]     = 1
+        cm["$pp_colour_mulr"]       = 0
+        cm["$pp_colour_mulg"]       = 0
+        cm["$pp_colour_mulb"]       = 0
+
+        DrawColorModify(cm)
+        contrastAdd = math.Approach(contrastAdd, math.Remap(sanity, 0, SANITY_MEDIUM, 0.1, 0), frameTime * 0.25)
+    else
+        contrastAdd = math.Approach(contrastAdd, 0, frameTime * 0.5)
+    end
+end)
+
+------------------------------------------------------------
+-- World overlays (eyes, skeletons)
+------------------------------------------------------------
+hook.Add("PostDrawOpaqueRenderables", "ix_sanity_postdraw_effects", function()
+    local lp = LocalPlayer()
+    if not IsValid(lp) or not lp:Alive() then return end
+
+    local sanity = GetPlayerSanity()
+
+    -- Very low sanity: red eyes + skeleton + dynamic light on nearby humans
+    if sanity <= SANITY_VERY_LOW then
+        for _, v in ipairs(player.GetAll()) do
+            if v == lp then continue end
+            if not (IsValid(v) and v:IsPlayer() and v:Alive()) then continue end
+
+            local mt = v:GetMoveType()
+            if not (mt == MOVETYPE_WALK or mt == MOVETYPE_LADDER) then continue end
+
+            local model = v:GetModel() or ""
+            if not (string.find(model, "models/player", 1, true) or string.find(model, "humans", 1, true)) then continue end
+
+            if lp:GetPos():DistToSqr(v:GetPos()) > (512 * 512) then continue end
+
+            -- Eyes glow
+            local headBone = v:LookupBone("ValveBiped.Bip01_Head1")
+            if headBone then
+                local eyesIndex = v:LookupAttachment("eyes")
+                local eyesAttachment = eyesIndex and v:GetAttachment(eyesIndex)
+
+                if eyesAttachment then
+                    local forward   = eyesAttachment.Ang:Forward()
+                    local right     = eyesAttachment.Ang:Right()
+                    local eyePos    = eyesAttachment.Pos
+                    local viewerDir = (EyePos() - eyePos):Angle():Forward()
+
+                    local firstEye  = eyePos + (forward * 0.6) + (right * -1.25) + (viewerDir * 1)
+                    local secondEye = eyePos + (forward * 0.6) + (right *  1.25) + (viewerDir * 1)
+
+                    render.SetMaterial(matEyeGlow)
+                    render.DrawSprite(firstEye, 2, 1.8, Color(200, 0, 0, 255))
+                    render.DrawSprite(secondEye, 2, 1.8, Color(200, 0, 0, 255))
+                end
+            end
+
+            -- Skeleton overlay (bonemerged)
+            CreateInsanitySkeleton(v)
+
+            -- Dynamic red-ish light from the eyes
+            local dl = DynamicLight(v:EntIndex())
+            if dl then
+                dl.pos        = v:EyePos()
+                dl.r          = 255
+                dl.g          = 200
+                dl.b          = 200
+                dl.brightness = 0.5
+                dl.Decay      = 1000
+                dl.Size       = 128
+                dl.DieTime    = CurTime() + 1
+            end
+        end
+    else
+        -- Sanity improved: clean up all skeleton overlays
+        for idx, skeleton in pairs(insanitySkeletons) do
+            local ply = Entity(idx)
+            if IsValid(ply) then
+                RemoveInsanitySkeleton(ply)
+            elseif IsValid(skeleton) then
+                skeleton:Remove()
+                insanitySkeletons[idx] = nil
+            else
+                insanitySkeletons[idx] = nil
+            end
+        end
+    end
+end)
+
+------------------------------------------------------------
+-- Audio stingers by sanity
+------------------------------------------------------------
+
+local function StartInsanityLoop()
+    if not insanityLoopSound then
+        local lp = LocalPlayer()
+        if IsValid(lp) then
+            insanityLoopSound = CreateSound(lp, "citizensounds/insanity_outside.mp3")
+            insanityLoopSound:SetSoundLevel(0) -- ambient, no attenuation dropoff
+            insanityLoopSound:PlayEx(1, 100)   -- volume 1, pitch 100
+        end
+    elseif not insanityLoopSound:IsPlaying() then
+        insanityLoopSound:PlayEx(1, 100)
+    end
+end
+
+local function StopInsanityLoop()
+    if insanityLoopSound then
+        insanityLoopSound:Stop()
+        insanityLoopSound = nil
+    end
+end
+
+hook.Add("Think", "ix_sanity_audio_effects", function()
+    local lp = LocalPlayer()
+    if not IsValid(lp) or not lp:Alive() then
+        StopInsanityLoop()
+        return
+    end
+
+    local sanity = GetPlayerSanity()
+
+    -- start/stop the continuous insanity ambience
+    -- (use the same threshold that drives your hallucinations)
+    if sanity <= sanity_threshold then
+        StartInsanityLoop()
+    else
+        StopInsanityLoop()
+    end
+
+    -- ... keep your existing stinger logic below this line ...
+    local now = CurTime()
+    if sanity <= SANITY_LOW and (not nextSanitySound or nextSanitySound < now) then
+        if sanity <= SANITY_VERY_LOW then
+            nextSanitySound = now + math.random(40, 60)
+            if #lowSanitySounds > 0 then
+                lp:EmitSound(table.Random(lowSanitySounds), 60)
+            end
+        else
+            nextSanitySound = now + math.random(20, 60)
+            if #medSanitySounds > 0 then
+                lp:EmitSound(table.Random(medSanitySounds), 60, math.random(75, 100))
+            end
+        end
+    end
+end)
+
+------------------------------------------------------------
+-- NO PrePlayerDraw hider anymore (we hard-hide via material)
+-- This avoids double-render/overlap issues with other hooks.
+------------------------------------------------------------
+
+------------------------------------------------------------
+-- Main logic timer
+------------------------------------------------------------
+timer.Create("ix_insanity_zombify_v4", 0.3, 0, function()
+    local lp = LocalPlayer()
+    if not IsValid(lp) then return end
+
+    local sanity = GetPlayerSanity()
+
+    -- Add/remove zombies
+    for _, p in ipairs(player.GetAll()) do
         if should_swap(p, lp, sanity) then
             add_zombie(p)
         else
             remove_zombie(p)
         end
     end
-    
-    -- Clean up invalid entries
-    for p,_ in pairs(hall) do
+
+    -- Cleanup invalids or sanity restored
+    for p, _ in pairs(hall) do
         if (not IsValid(p)) or sanity > sanity_threshold then
             remove_zombie(p)
         end
     end
 end)
 
--- Cleanup hooks
-hook.Add("PlayerRemoved","ix_insanity_zombify_cleanup_v4", function(p)
-    remove_zombie(p)
-end)
-
-hook.Add("ShutDown","ix_insanity_zombify_shutdown_v4", function()
-    for p,_ in pairs(hall) do
-        remove_zombie(p)
+------------------------------------------------------------
+-- Optional: keep bodygroups/skin mirrored if they change at runtime
+------------------------------------------------------------
+timer.Create("ix_insanity_sync_bgroups", 0.5, 0, function()
+    for p, rec in pairs(hall) do
+        if IsValid(p) and rec and IsValid(rec.cs) then
+            rec.cs:SetSkin(p:GetSkin() or 0)
+            local bgs = p.GetBodyGroups and p:GetBodyGroups() or {}
+            for _, bg in ipairs(bgs) do
+                rec.cs:SetBodygroup(bg.id, p:GetBodygroup(bg.id))
+            end
+        end
     end
 end)
 
--- Debug command to test the system
+------------------------------------------------------------
+-- Cleanup
+------------------------------------------------------------
+hook.Add("PlayerRemoved", "ix_insanity_zombify_cleanup_v4", function(p)
+    remove_zombie(p)
+    if IsValid(p) then RemoveInsanitySkeleton(p) end
+end)
+
+hook.Add("ShutDown", "ix_insanity_zombify_shutdown_v4", function()
+    for p, _ in pairs(hall) do remove_zombie(p) end
+    for idx, sk in pairs(insanitySkeletons) do
+        if IsValid(sk) then sk:Remove() end
+        insanitySkeletons[idx] = nil
+    end
+end)
+
+------------------------------------------------------------
+-- Debugging helpers
+------------------------------------------------------------
 concommand.Add("test_zombify", function()
-    local lp = LocalPlayer()
-    if not IsValid(lp) then return end
-    
     print("Testing zombify system...")
-    print("Valid model:", have_model())
-    print("Current sanity threshold:", sanity_threshold)
+    print("Current sanity:", GetPlayerSanity())
+    print("Sanity thresholds - Very Low:", SANITY_VERY_LOW, "Low:", SANITY_LOW, "Medium:", SANITY_MEDIUM)
     print("Zombie entries:", table.Count(hall))
-    
+    print("Skeleton entries:", table.Count(insanitySkeletons))
+    print("Contrast add value:", contrastAdd)
+
     for p, rec in pairs(hall) do
         if IsValid(p) and rec and IsValid(rec.cs) then
             print("Zombie active for:", p:Name())
             print("  CS Model:", rec.cs:GetModel())
             print("  CS Valid:", IsValid(rec.cs))
-            print("  CS NoDraw:", rec.cs:GetNoDraw())
             print("  Player Pos:", p:GetPos())
-            print("  CS Pos:", rec.cs:GetPos())
+        end
+    end
+
+    for idx, skeleton in pairs(insanitySkeletons) do
+        local player = Entity(idx)
+        if IsValid(player) and IsValid(skeleton) then
+            print("Skeleton active for:", player:Name())
+            print("  Skeleton Model:", skeleton:GetModel())
+            print("  Skeleton Color:", skeleton:GetColor())
         end
     end
 end)
 
--- Force a specific player to become a zombie (for testing)
-concommand.Add("force_zombify", function(ply, cmd, args)
+concommand.Add("force_zombify", function(_, _, args)
     local target_name = args[1]
     if not target_name then
         print("Usage: force_zombify <player_name>")
         return
     end
-    
     for _, p in ipairs(player.GetAll()) do
-        if string.find(string.lower(p:Name()), string.lower(target_name)) then
+        if string.find(string.lower(p:Name()), string.lower(target_name), 1, true) then
             add_zombie(p)
             print("Forced zombify on:", p:Name())
             return
         end
     end
     print("Player not found:", target_name)
+end)
+
+concommand.Add("test_sanity_effects", function()
+    local current_sanity = GetPlayerSanity()
+    print("Current sanity:", current_sanity)
+    print("Contrast value:", contrastAdd)
+
+    if current_sanity <= SANITY_VERY_LOW then
+        print("Very low sanity effects active")
+    elseif current_sanity <= SANITY_LOW then
+        print("Low sanity effects active")
+    elseif current_sanity <= SANITY_MEDIUM then
+        print("Medium sanity effects active")
+    else
+        print("No sanity effects active")
+    end
 end)
