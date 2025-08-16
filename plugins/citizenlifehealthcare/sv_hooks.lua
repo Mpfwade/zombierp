@@ -209,13 +209,9 @@ function PLUGIN:HandleSicknessEffects(ply, char)
     if ply:GetMoveType() == MOVETYPE_NOCLIP then return end
     if ply.ixSickTick and ply.ixSickTick > CurTime() then return end
     local sicknessLevel = char:GetData("sickness", 0)
-    local shouldGetSick = char:GetWarmth() < 40 or ply:GetNWBool("recentDeathNearby", false) -- Trigger sickness if exposed to bad conditions
-    if shouldGetSick then
-        sicknessLevel = math.Clamp(sicknessLevel + 1, 0, 100)
-    elseif sicknessLevel > 0 then
-        sicknessLevel = math.Clamp(sicknessLevel - 1, 0, 100)
-    end
-
+    local shouldGetSick = char:GetWarmth() < 40
+    sicknessLevel = math.Clamp(sicknessLevel + 1, 0, 100)
+    if sicknessLevel > 0 then sicknessLevel = math.Clamp(sicknessLevel - 1, 0, 100) end
     char:SetData("sickness", sicknessLevel)
     if sicknessLevel > 15 then self:HandleCoughing(ply, sicknessLevel) end
     if sicknessLevel > 50 then self:HandleVomiting(ply, sicknessLevel) end
@@ -380,47 +376,31 @@ util.AddNetworkString("StopClientSound")
 local stressImpactFactor = 0.2 -- The impact factor determines how much stress affects sanity decay
 function PLUGIN:UpdateSanity(ply)
     if ply.ixSanityTick and ply.ixSanityTick > CurTime() then return end
-
     local char = ply:GetCharacter()
     if not char then return end
-
     local currentSanity = char:GetSanity()
     local stress = char:GetData("stress", 0)
     local decayRate = ix.config.Get("sanityDecayRate", 0.5) + (stress * stressImpactFactor)
-
-    if ply:GetNWBool("InStressZone") then
-        decayRate = decayRate + ix.config.Get("sanityZoneDecayRate", 1.0)
-    end
-
-    -- Nearby influences
-    local pos = ply:GetPos()
+    if ply:GetNWBool("InStressZone") then decayRate = decayRate + ix.config.Get("sanityZoneDecayRate", 1.0) end
+    local pos = ply:GetPos() -- Nearby influences
     local entities = ents.FindInSphere(pos, 450)
     local isNearPositiveEntity = false
     local teamSanityBonus = 0
-
     for _, ent in ipairs(entities) do
-        if ent:IsPlayer() and ent ~= ply then
-            teamSanityBonus = teamSanityBonus + 0.9
-        end
-
-        if (ent:GetClass() == "ix_tv" and ent.IsActivated) or (ent:GetClass() == "ww2_radio" and ent.On) then
-            isNearPositiveEntity = true
-        end
+        if ent:IsPlayer() and ent ~= ply then teamSanityBonus = teamSanityBonus + 0.9 end
+        if (ent:GetClass() == "ix_tv" and ent.IsActivated) or (ent:GetClass() == "ww2_radio" and ent.On) then isNearPositiveEntity = true end
     end
 
-    -- Boost sanity from positive environment
-    if isNearPositiveEntity then
+    if isNearPositiveEntity then -- Boost sanity from positive environment
         currentSanity = math.min(100, currentSanity + ix.config.Get("sanityRecoveryRate", 0.3))
     end
 
-    -- Boost sanity if stress is zero
-    if stress == 0 then
+    if stress == 0 then -- Boost sanity if stress is zero
         currentSanity = math.min(100, currentSanity + 0.5) -- Adjust gain rate here
     end
 
     currentSanity = math.min(100, currentSanity + teamSanityBonus)
     currentSanity = math.max(0, currentSanity - decayRate)
-
     char:SetSanity(currentSanity)
     ply.ixSanityTick = CurTime() + ix.config.Get("sanityTime", 120)
 end
@@ -444,11 +424,6 @@ function PLUGIN:UpdateStress(ply)
     if not ply.nextStressIncrease or ply.nextStressIncrease <= CurTime() then -- Track the next time to update stress increase
         ply.nextStressIncrease = CurTime() + updateInterval
         local newStress = stressLevel
-        if ply:GetNWBool("recentDeathNearby") then -- Increase stress if a recent death was nearby
-            newStress = math.min(100, newStress + 10)
-            print("nearby death")
-        end
-
         if zombieCount > 5 then
             newStress = math.min(100, newStress + 0.3 * zombieCount)
             print("nearby zombies: " .. zombieCount)
@@ -477,38 +452,14 @@ function PLUGIN:UpdateStress(ply)
     local stressFactor = stressLevel * stressImpactFactor
     local decayRate = baseDecay + stressFactor
     self:UpdateSanity(ply, decayRate)
-    if ply:GetNWBool("recentDeathNearby") then -- Reset recent death flag after 30 seconds
-        timer.Simple(30, function() if IsValid(ply) then ply:SetNWBool("recentDeathNearby", false) end end)
-    end
 end
-
-hook.Add("DoPlayerDeath", "SanityOnDeath", function(victim, attacker, dmginfo)
-    local radius = 500 -- Radius to check for nearby players
-    for _, ply in ipairs(player.GetAll()) do -- Check all players to see who is within the radius of the victim
-        if ply ~= victim and ply:GetPos():Distance(victim:GetPos()) <= radius then
-            if attacker:IsPlayer() and ply == attacker then -- Exclude the attacker from stress increase
-                continue
-            end
-
-            ply:SetNWBool("recentDeathNearby", true) -- Set a flag on players near the death to indicate a recent death was nearby
-            timer.Simple(60, function()
-                if IsValid(ply) then -- Reset this flag after a brief period to simulate stress response duration -- Reset after 60 seconds
-                    ply:SetNWBool("recentDeathNearby", false)
-                end
-            end)
-        end
-    end
-end)
 
 function PLUGIN:UpdateWeakness(ply, char)
     if ply.ixWeakTick and ply.ixWeakTick > CurTime() then return end
-
     local hunger = char:GetHunger()
     local weakness = char:GetData("weakness", 0)
     local sickness = char:GetData("sickness", 0)
-
-    -- Increase weakness based on hunger
-    if hunger < 20 then
+    if hunger < 20 then -- Increase weakness based on hunger
         weakness = math.min(weakness + 3, 100)
     elseif hunger < 40 then
         weakness = math.min(weakness + 1, 100)
@@ -516,37 +467,26 @@ function PLUGIN:UpdateWeakness(ply, char)
         weakness = math.max(0, weakness - 2)
     end
 
-    -- Apply weakness
-    char:SetData("weakness", weakness)
-
-    -- Recover from sickness if weakness is low
-    if weakness < 35 and sickness > 0 then
+    char:SetData("weakness", weakness) -- Apply weakness
+    if weakness < 35 and sickness > 0 then -- Recover from sickness if weakness is low
         char:SetData("sickness", math.max(0, sickness - 10))
     end
 
-    -- Chance to become sick if weakness is high
-    if weakness > 45 and sickness <= 0 then
+    if weakness > 45 and sickness <= 0 then -- Chance to become sick if weakness is high
         local chance = weakness - 25
-        if math.random(100) < chance then
-            char:SetData("sickness", 1)
-        end
+        if math.random(100) < chance then char:SetData("sickness", 1) end
     end
 
-    -- Progress sickness if already sick
-    if sickness > 0 then
+    if sickness > 0 then -- Progress sickness if already sick
         char:SetData("sickness", math.min(sickness + 1, 100))
     end
 
-    -- Stamina drain based on weakness (progressive)
-    if ply.ConsumeStamina and ply:Alive() then
+    if ply.ConsumeStamina and ply:Alive() then -- Stamina drain based on weakness (progressive)
         local drain = math.Clamp(weakness * 0.02, 0, 3) -- Max 3 stamina drained per 10s
-        if drain > 0 then
-            ply:ConsumeStamina(drain)
-        end
+        if drain > 0 then ply:ConsumeStamina(drain) end
     end
 
-    -- Scale bones
-    local scale = 1 - (weakness / 750)
+    local scale = 1 - (weakness / 750) -- Scale bones
     local bones = ply:GetBoneCount() or 0
     for i = 0, bones - 1 do
         local boneName = ply:GetBoneName(i)
@@ -557,8 +497,7 @@ function PLUGIN:UpdateWeakness(ply, char)
         end
     end
 
-    -- Resting reduces weakness faster
-    if ply:GetNWBool("IsActing") then
+    if ply:GetNWBool("IsActing") then -- Resting reduces weakness faster
         char:SetData("weakness", math.max(0, weakness - 5))
     end
 
@@ -566,46 +505,39 @@ function PLUGIN:UpdateWeakness(ply, char)
 end
 
 local meleeStaminaDrain = {
-    ["tfa_nmrih_bat"] = 5,      -- was 10
-    ["tfa_nmrih_bcd"] = 4,      -- was 8
-    ["tfa_nmrih_cleaver"] = 3,  -- was 6
-    ["tfa_nmrih_crowbar"] = 4,  -- was 8
-    ["tfa_nmrih_etool"] = 4.5,  -- was 9
-    ["tfa_nmrih_fireaxe"] = 6,  -- was 12
-    ["tfa_nmrih_fubar"] = 6.5,  -- was 13
-    ["tfa_nmrih_hatchet"] = 3.5,-- was 7
-    ["tfa_nmrih_kknife"] = 2,   -- was 4
-    ["tfa_nmrih_lpipe"] = 5,    -- was 10
-    ["tfa_nmrih_machete"] = 4.5,-- was 9
-    ["tfa_nmrih_pickaxe"] = 6,  -- was 12
+    ["tfa_nmrih_bat"] = 5, -- was 10
+    ["tfa_nmrih_bcd"] = 4, -- was 8
+    ["tfa_nmrih_cleaver"] = 3, -- was 6
+    ["tfa_nmrih_crowbar"] = 4, -- was 8
+    ["tfa_nmrih_etool"] = 4.5, -- was 9
+    ["tfa_nmrih_fireaxe"] = 6, -- was 12
+    ["tfa_nmrih_fubar"] = 6.5, -- was 13
+    ["tfa_nmrih_hatchet"] = 3.5, -- was 7
+    ["tfa_nmrih_kknife"] = 2, -- was 4
+    ["tfa_nmrih_lpipe"] = 5, -- was 10
+    ["tfa_nmrih_machete"] = 4.5, -- was 9
+    ["tfa_nmrih_pickaxe"] = 6, -- was 12
     ["tfa_nmrih_sledge"] = 7.5, -- was 15
-    ["tfa_nmrih_spade"] = 4,    -- was 8
+    ["tfa_nmrih_spade"] = 4, -- was 8
     ["tfa_nmrih_wrench"] = 3.5, -- was 7
 }
 
 hook.Add("KeyPress", "StaminaDrainMeleeAttack", function(ply, key)
     if not IsValid(ply) or not ply:Alive() then return end
     if key ~= IN_ATTACK then return end
-
     local weapon = ply:GetActiveWeapon()
     if not IsValid(weapon) then return end
-
     local class = weapon:GetClass()
     local drain = meleeStaminaDrain[class]
     if not drain then return end
+    if ply.GetStamina and ply:GetStamina() < 20 then -- Check if stamina is at least 20 before swinging
+        return -- Optionally, notify the player here
+    end
 
-    -- Check if stamina is at least 20 before swinging
-    if ply.GetStamina and ply:GetStamina() < 20 then
-        -- Optionally, notify the player here
+    if ply.lastMeleeDrain and ply.lastMeleeDrain > CurTime() then -- Prevent spamming by adding cooldown
         return
     end
 
-    -- Prevent spamming by adding cooldown
-    if ply.lastMeleeDrain and ply.lastMeleeDrain > CurTime() then return end
     ply.lastMeleeDrain = CurTime() + 0.6 -- Adjust depending on weapon swing speed
-
-    if ply.ConsumeStamina then
-        ply:ConsumeStamina(drain)
-    end
+    if ply.ConsumeStamina then ply:ConsumeStamina(drain) end
 end)
-
