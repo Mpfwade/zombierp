@@ -399,7 +399,7 @@ function PLUGIN:UpdateSanity(ply)
     local teamSanityBonus = 0
 
     for _, ent in ipairs(entities) do
-        if ent:IsPlayer() and ent:Team() == ply:Team() and ent ~= ply then
+        if ent:IsPlayer() and ent ~= ply then
             teamSanityBonus = teamSanityBonus + 0.9
         end
 

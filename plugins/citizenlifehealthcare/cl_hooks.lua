@@ -92,7 +92,7 @@ function PLUGIN:RenderScreenspaceEffects()
 
 if stressLevel > 50 then
     local stressAmount = math.Clamp((stressLevel - 50) / 50, 0, 1) -- Scale from 0 to 1 between 50-100
-    local stressBlur = Lerp(stressAmount, 0.5, 5.2) -- Increased blur range: 0.3 to 1.2
+    local stressBlur = Lerp(stressAmount, 0.3, 0.6) -- Increased blur range: 0.3 to 1.2
     blurStrength = blurStrength + stressBlur
 end
 
